@@ -1,0 +1,14 @@
+{
+  "name": "cutline-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Phone-first sports video editing and AI review workspace prototype",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
