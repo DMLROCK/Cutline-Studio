@@ -6,7 +6,15 @@ const http = require('node:http');
 const { createServer, MAX_VIDEO_BYTES } = require('../server');
 
 const TEST_KEY = 'test-only-fake-key';
-const ENABLED_ENV = { CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: TEST_KEY };
+const TEST_PASSWORD = 'test-only-long-password-42';
+const AUTH = `Basic ${Buffer.from(`cutline:${TEST_PASSWORD}`).toString('base64')}`;
+const ENABLED_ENV = {
+  CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: TEST_KEY, CUTLINE_ACCESS_PASSWORD: TEST_PASSWORD,
+};
+
+function authenticatedFetch(url) {
+  return fetch(url, { headers: { Authorization: AUTH } });
+}
 
 async function start(t, options = {}) {
   const server = createServer(options);
@@ -20,6 +28,7 @@ async function start(t, options = {}) {
 
 function review(baseUrl, options = {}) {
   const headers = {
+    Authorization: AUTH,
     Origin: baseUrl,
     'Content-Type': 'video/webm',
     'X-Clip-Consent': 'yes',
@@ -40,16 +49,19 @@ function successfulProviderResponse(text = 'Sample model review') {
   });
 }
 
-test('AI stays disabled unless both the explicit flag and a nonblank key are present', async t => {
+test('AI stays disabled unless the flag, nonblank key and valid access password are present', async t => {
   let providerCalls = 0;
   for (const env of [
     {},
     { CUTLINE_AI_ENABLED: 'true' },
     { CUTLINE_AI_ENABLED: 'false', GEMINI_API_KEY: TEST_KEY },
     { CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: '  ' },
+    { CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: TEST_KEY },
+    { CUTLINE_ACCESS_PASSWORD: TEST_PASSWORD, CUTLINE_AI_ENABLED: 'true' },
+    { CUTLINE_ACCESS_PASSWORD: TEST_PASSWORD, CUTLINE_AI_ENABLED: 'false', GEMINI_API_KEY: TEST_KEY },
   ]) {
     const baseUrl = await start(t, { env, fetchImpl: async () => { providerCalls++; throw new Error('must not be called'); } });
-    const health = await (await fetch(baseUrl + '/api/health')).json();
+    const health = await (await authenticatedFetch(baseUrl + '/api/health')).json();
     assert.equal(health.videoReviewReady, false);
     assert.equal((await review(baseUrl)).status, 503);
   }
@@ -58,14 +70,14 @@ test('AI stays disabled unless both the explicit flag and a nonblank key are pre
 
 test('health reports configuration, size limit and model without exposing the API key', async t => {
   const baseUrl = await start(t, { env: { ...ENABLED_ENV, GEMINI_MODEL: 'gemini-3.6-flash' } });
-  const healthText = await (await fetch(baseUrl + '/api/health')).text();
+  const healthText = await (await authenticatedFetch(baseUrl + '/api/health')).text();
   const health = JSON.parse(healthText);
   assert.equal(health.videoReviewReady, true);
   assert.equal(health.model, 'gemini-3.6-flash');
   assert.equal(health.maxVideoBytes, MAX_VIDEO_BYTES);
   assert.match(health.message, /not been connection-tested/i);
   assert.doesNotMatch(healthText, /test-only-fake-key/);
-  assert.doesNotMatch(await (await fetch(baseUrl + '/')).text(), /test-only-fake-key/);
+  assert.doesNotMatch(await (await authenticatedFetch(baseUrl + '/')).text(), /test-only-fake-key/);
 });
 
 test('unsafe model names fall back to the default rather than entering the provider URL', async t => {
@@ -74,7 +86,7 @@ test('unsafe model names fall back to the default rather than entering the provi
     env: { ...ENABLED_ENV, GEMINI_MODEL: '../../not-a-model?key=secret' },
     fetchImpl: async url => { providerUrl = url; return successfulProviderResponse(); },
   });
-  const health = await (await fetch(baseUrl + '/api/health')).json();
+  const health = await (await authenticatedFetch(baseUrl + '/api/health')).json();
   assert.equal(health.model, 'gemini-3.8-flash');
   assert.equal((await review(baseUrl)).status, 200);
   assert.equal(providerUrl, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');
@@ -137,6 +149,40 @@ test('cooldown uses the socket peer and cannot be bypassed by changing X-Forward
   assert.equal(providerCalls, 2);
 });
 
+test('allows only one video review at a time and releases the slot afterward', { timeout: 10000 }, async t => {
+  let providerCalls = 0;
+  let clock = 100_000;
+  let markStarted;
+  let release;
+  const started = new Promise(resolve => { markStarted = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  t.after(() => release());
+  const baseUrl = await start(t, {
+    env: ENABLED_ENV,
+    now: () => clock,
+    fetchImpl: async () => {
+      providerCalls++;
+      if (providerCalls === 1) {
+        markStarted();
+        await gate;
+      }
+      return successfulProviderResponse();
+    },
+  });
+  const first = review(baseUrl);
+  await started;
+  clock += 30_000; // Ensure this response is due to concurrency, not cooldown.
+  const second = await review(baseUrl);
+  assert.equal(second.status, 429);
+  assert.match((await second.json()).error, /another video review is in progress/i);
+  assert.equal(providerCalls, 1);
+  release();
+  assert.equal((await first).status, 200);
+  clock += 30_000;
+  assert.equal((await review(baseUrl)).status, 200);
+  assert.equal(providerCalls, 2);
+});
+
 test('rejects a declared oversized upload before contacting the provider', async t => {
   let providerCalls = 0;
   const baseUrl = await start(t, { env: ENABLED_ENV, fetchImpl: async () => { providerCalls++; return successfulProviderResponse(); } });
@@ -144,6 +190,7 @@ test('rejects a declared oversized upload before contacting the provider', async
     const request = http.request(baseUrl + '/api/video-review', {
       method: 'POST',
       headers: {
+        Authorization: AUTH,
         Origin: baseUrl,
         'Content-Type': 'video/mp4',
         'X-Clip-Consent': 'yes',
@@ -166,7 +213,7 @@ test('rejects oversized chunked uploads without forwarding them', async t => {
   const result = await new Promise((resolve, reject) => {
     const request = http.request(baseUrl + '/api/video-review', {
       method: 'POST',
-      headers: { Origin: baseUrl, 'Content-Type': 'video/webm', 'X-Clip-Consent': 'yes' },
+      headers: { Authorization: AUTH, Origin: baseUrl, 'Content-Type': 'video/webm', 'X-Clip-Consent': 'yes' },
     }, response => {
       response.resume();
       response.on('end', () => resolve(response.statusCode));
@@ -179,13 +226,21 @@ test('rejects oversized chunked uploads without forwarding them', async t => {
   assert.equal(providerCalls, 0);
 });
 
-test('rejects an empty clip and never contacts the provider', async t => {
+test('an empty clip never contacts the provider and releases the review slot', async t => {
   let providerCalls = 0;
-  const baseUrl = await start(t, { env: ENABLED_ENV, fetchImpl: async () => { providerCalls++; return successfulProviderResponse(); } });
+  let clock = 100_000;
+  const baseUrl = await start(t, {
+    env: ENABLED_ENV,
+    now: () => clock,
+    fetchImpl: async () => { providerCalls++; return successfulProviderResponse(); },
+  });
   const response = await review(baseUrl, { body: '' });
   assert.equal(response.status, 400);
   assert.match((await response.json()).error, /empty/i);
   assert.equal(providerCalls, 0);
+  clock += 30_000;
+  assert.equal((await review(baseUrl)).status, 200);
+  assert.equal(providerCalls, 1);
 });
 
 test('sanitizes provider failures and handles rate limits, empty replies and timeouts', async t => {

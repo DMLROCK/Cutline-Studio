@@ -92,7 +92,7 @@ test('does not expose repository or configuration files', async () => {
 test('the start command honors HOST and PORT from a different working directory', { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     cwd: os.tmpdir(),
-    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', CUTLINE_AI_ENABLED: 'false', GEMINI_API_KEY: '' },
+    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', CUTLINE_AI_ENABLED: 'false', GEMINI_API_KEY: '', CUTLINE_ACCESS_PASSWORD: undefined },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); });
@@ -121,18 +121,37 @@ test('the start command fails clearly for an invalid PORT', () => {
   assert.match(child.stderr, /PORT must be an integer/);
 });
 
-test('starting with AI configured warns about missing access controls without logging the key', { timeout: 10000 }, async t => {
+test('starting with a key but no password disables AI without logging the key', { timeout: 10000 }, async t => {
   const fakeKey = 'fake-key-for-logging-test';
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: fakeKey },
+    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: fakeKey, CUTLINE_ACCESS_PASSWORD: undefined },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); });
   const [stdout, stderr] = await Promise.all([once(child.stdout, 'data'), once(child.stderr, 'data')]);
   const logs = stdout[0].toString() + stderr[0].toString();
-  assert.match(logs, /video AI configured/i);
-  assert.match(logs, /no built-in authentication/i);
+  assert.match(logs, /video AI off/i);
+  assert.match(logs, /until a valid access password/i);
   assert.doesNotMatch(logs, new RegExp(fakeKey));
+  const exited = once(child, 'exit');
+  child.kill();
+  await exited;
+});
+
+test('startup logs do not expose a configured password or API key', { timeout: 10000 }, async t => {
+  const fakeKey = 'fake-key-for-logging-test';
+  const fakePassword = 'test-password-for-logging-42';
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, HOST: '127.0.0.1', PORT: '0', CUTLINE_AI_ENABLED: 'true', GEMINI_API_KEY: fakeKey, CUTLINE_ACCESS_PASSWORD: fakePassword },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); });
+  const [stdout, stderr] = await Promise.all([once(child.stdout, 'data'), once(child.stderr, 'data')]);
+  const logs = stdout[0].toString() + stderr[0].toString();
+  assert.match(logs, /access protected; video AI configured/i);
+  assert.match(logs, /personal testing only/i);
+  assert.doesNotMatch(logs, new RegExp(fakeKey));
+  assert.doesNotMatch(logs, new RegExp(fakePassword));
   const exited = once(child, 'exit');
   child.kill();
   await exited;

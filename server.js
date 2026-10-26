@@ -1,8 +1,9 @@
 'use strict';
 
-// Cutline Studio's dependency-free preview server. AI review is opt-in and
-// requires a server-side key; this is not an authenticated production service.
+// Cutline Studio's dependency-free preview server. A shared password can
+// protect a personal preview, but this is not a multi-user production service.
 const http = require('node:http');
+const { createHash, timingSafeEqual } = require('node:crypto');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 
@@ -13,6 +14,9 @@ const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
 const REVIEW_COOLDOWN_MS = 30_000;
 const PROVIDER_TIMEOUT_MS = 120_000;
+const AUTH_WINDOW_MS = 60_000;
+const MAX_AUTH_FAILURES = 5;
+const ACCESS_USERNAME = 'cutline';
 const ALLOWED_VIDEO_TYPES = new Set([
   'video/mp4', 'video/mpeg', 'video/mov', 'video/quicktime', 'video/avi',
   'video/x-flv', 'video/mpg', 'video/webm', 'video/wmv', 'video/3gpp',
@@ -22,7 +26,32 @@ function configuration(env) {
   const requestedModel = String(env.GEMINI_MODEL || '');
   const model = /^[a-zA-Z0-9._-]{1,80}$/.test(requestedModel) ? requestedModel : DEFAULT_MODEL;
   const apiKey = String(env.GEMINI_API_KEY || '').trim();
-  return { model, apiKey, ready: env.CUTLINE_AI_ENABLED === 'true' && apiKey.length > 0 };
+  const passwordProvided = env.CUTLINE_ACCESS_PASSWORD !== undefined;
+  const password = passwordProvided ? String(env.CUTLINE_ACCESS_PASSWORD) : '';
+  // A supplied but invalid password blocks the entire app, rather than leaving
+  // a preview open when its owner expects it to be protected.
+  const passwordLength = [...password].length;
+  const passwordValid = passwordProvided && passwordLength >= 16 && passwordLength <= 256
+    && !/^\s+$/.test(password) && !/[\x00-\x1f\x7f]/.test(password);
+  const accessDigest = passwordValid
+    ? createHash('sha256').update(`${ACCESS_USERNAME}:${password}`, 'utf8').digest()
+    : null;
+  const aiRequested = env.CUTLINE_AI_ENABLED === 'true' && apiKey.length > 0;
+  return {
+    model, apiKey, passwordProvided, passwordValid, accessDigest, aiRequested,
+    // A flag and key alone can never expose a billable public AI endpoint.
+    ready: aiRequested && passwordValid,
+  };
+}
+
+function validAuthorization(header, expectedDigest) {
+  if (typeof header !== 'string') return false;
+  const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(header);
+  if (!match) return false;
+  const supplied = Buffer.from(match[1], 'base64');
+  if (supplied.length > 2048) return false;
+  const suppliedDigest = createHash('sha256').update(supplied).digest();
+  return timingSafeEqual(suppliedDigest, expectedDigest);
 }
 
 function send(res, status, body, contentType, headers = {}) {
@@ -108,6 +137,59 @@ function readLimitedBody(req, maxBytes) {
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
   const config = configuration(env);
   const reviewTimes = new Map();
+  const failedLogins = new Map();
+  let reviewInFlight = false;
+
+  function authorize(req, res) {
+    if (!config.passwordProvided) return true;
+    if (!config.passwordValid) {
+      rejectRequest(req, res, 503, 'Access protection is misconfigured. Contact the app owner.');
+      return false;
+    }
+
+    // Keep the personal preview out of frames, where confirmation UI could be
+    // clickjacked. Unprotected local/Arena previews retain their normal behavior.
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+
+    // Missing credentials always receive a login challenge. For requests with
+    // credentials, enforce the limit *before* comparing them, so a 429 cannot
+    // be used to keep guessing. Behind a proxy, peers can share the same limit.
+    if (req.headers.authorization !== undefined) {
+      const address = req.socket.remoteAddress || 'unknown';
+      const time = now();
+      let attempt = failedLogins.get(address);
+      if (attempt && (time - attempt.started >= AUTH_WINDOW_MS || time < attempt.started)) {
+        failedLogins.delete(address);
+        attempt = null;
+      }
+      if (attempt && attempt.count >= MAX_AUTH_FAILURES) {
+        const seconds = Math.max(1, Math.ceil((AUTH_WINDOW_MS - (time - attempt.started)) / 1000));
+        rejectRequest(req, res, 429, 'Too many sign-in attempts. Please wait and try again.', { 'Retry-After': seconds });
+        return false;
+      }
+      if (validAuthorization(req.headers.authorization, config.accessDigest)) {
+        failedLogins.delete(address);
+        return true;
+      }
+      if (!attempt) attempt = { started: time, count: 0 };
+      attempt.count++;
+      // Do not trust X-Forwarded-For, which can be forged. This bounded,
+      // in-memory guard is only a lightweight deterrent, not a security service.
+      if (failedLogins.size >= 500) {
+        for (const [ip, entry] of failedLogins) {
+          if (time - entry.started >= AUTH_WINDOW_MS || time < entry.started) failedLogins.delete(ip);
+        }
+        if (failedLogins.size >= 1000) failedLogins.delete(failedLogins.keys().next().value);
+      }
+      failedLogins.set(address, attempt);
+    }
+
+    rejectRequest(req, res, 401, 'Sign in to access this private preview.', {
+      'WWW-Authenticate': 'Basic realm="Cutline Studio", charset="UTF-8"',
+    });
+    return false;
+  }
 
   async function reviewVideo(req, res) {
     if (!config.ready) {
@@ -130,6 +212,12 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       return rejectRequest(req, res, 413, 'For AI review, choose a video no larger than 14 MB.', { Connection: 'close' });
     }
 
+    // One review at a time keeps a small personal host from retaining several
+    // large clips concurrently. This is not a substitute for per-user quotas.
+    if (reviewInFlight) {
+      return rejectRequest(req, res, 429, 'Another video review is in progress. Please wait and try again.');
+    }
+
     // Do not trust client-supplied X-Forwarded-For. Behind a proxy, this simple
     // guard may group multiple users together and is not a reliable user quota.
     const address = req.socket.remoteAddress || 'unknown';
@@ -146,6 +234,7 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       if (reviewTimes.size >= 1000) reviewTimes.delete(reviewTimes.keys().next().value);
     }
     reviewTimes.set(address, time);
+    reviewInFlight = true;
 
     try {
       const video = await readLimitedBody(req, MAX_VIDEO_BYTES);
@@ -210,12 +299,15 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       // Never log video, prompts, provider responses, or the API key.
       console.error('Video review failed due to a network or server error.');
       return sendJson(res, 502, { error: 'The video review could not be completed. No raw video is written to this server.' });
+    } finally {
+      reviewInFlight = false;
     }
   }
 
   const server = http.createServer(async (req, res) => {
     // Clients can disconnect while a rejected request is being drained.
     req.on('error', () => {});
+    if (!authorize(req, res)) return;
     let pathname;
     try {
       pathname = new URL(req.url || '/', 'http://cutline.local').pathname;
@@ -243,7 +335,7 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
         maxVideoBytes: MAX_VIDEO_BYTES,
         message: config.ready
           ? 'A model is configured, but has not been connection-tested. Each clip requires confirmation.'
-          : 'Video AI is off or missing a key. No clip is sent automatically.',
+          : 'Video AI is off or missing a key or access protection. No clip is sent automatically.',
       });
     }
 
@@ -279,9 +371,18 @@ if (require.main === module) {
     });
     server.listen(port, host, () => {
       const address = server.address();
-      const aiConfigured = configuration(process.env).ready;
-      console.log(`Cutline Studio is listening on ${host}:${address.port}; video AI ${aiConfigured ? 'configured' : 'off'}.`);
-      if (aiConfigured) console.warn('AI review has no built-in authentication or per-user quotas. Do not expose it publicly without access controls.');
+      const config = configuration(process.env);
+      const access = config.passwordValid ? 'protected' : (config.passwordProvided ? 'blocked (invalid password)' : 'unprotected');
+      console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}.`);
+      if (config.passwordProvided && !config.passwordValid) {
+        console.warn('Access password is invalid; all requests are blocked. Use a unique password of 16–256 characters.');
+      }
+      if (config.aiRequested && !config.passwordValid) {
+        console.warn('Video AI remains off until a valid access password is configured.');
+      }
+      if (config.ready) {
+        console.warn('Shared-password protection is for personal testing only; per-user quotas are not implemented. Use HTTPS.');
+      }
     });
   }
 }
