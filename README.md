@@ -31,6 +31,10 @@ An optional real-browser smoke test is in `scripts/browser-smoke.cjs`. It needs 
 
 Without an access password the local app is open to anyone who can reach it, and all AI routes remain **off**. Do not expose an unprotected personal preview to the internet.
 
+### Browser-only fallback preview
+
+For a quick look when the live sandbox is unavailable, the public branch can be opened through the third-party [HTML Preview service](https://htmlpreview.github.io/?https://github.com/DMLROCK/Cutline-Studio/blob/arena/ae97be88-cutline-studio/index.html). This is not the hosted Node app: AI, research, TikTok and server APIs are unavailable. It can load the browser editor, but codec/export support depends on the device and service. Because the page is delivered through a third party that controls its own code, do not enter secrets or use confidential media there; use a non-sensitive test clip. For actual AI, deploy the private Node app below.
+
 ## Set up a private hosted preview and Gemini
 
 Import the **`arena/ae97be88-cutline-studio` branch** as a Node service on a host that supports Node 20+, HTTPS, runtime secrets, and a long-running web process. Set the start command to `npm start` and configure the host's assigned `PORT` if it doesn't set one automatically. GitHub stores the code; it is not itself an always-on hosting service.

@@ -27,6 +27,8 @@ after(async () => {
 
 test('serves the supplied application at both entry paths', async () => {
   const expected = await readFile(path.join(__dirname, '..', 'index.html'), 'utf8');
+  // Relative loading also allows a browser-only preview under a subpath.
+  assert.match(expected, /<script src="\.\/editor-core\.js"><\/script>/);
   for (const entry of ['/', '/index.html?preview=1']) {
     const response = await fetch(baseUrl + entry);
     assert.equal(response.status, 200);
