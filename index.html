@@ -305,7 +305,10 @@
     .editor-stage { position: relative; width: min(100%, 280px); max-height: 410px; aspect-ratio: 9 / 16; overflow: hidden; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: #0a0d0d; transition: aspect-ratio .2s ease; }
     .editor-stage.ratio-square { aspect-ratio: 1 / 1; width: min(100%, 340px); }
     .editor-stage.ratio-wide { aspect-ratio: 16 / 9; width: min(100%, 520px); }
-    .editor-stage video { width: 100%; height: 100%; display: block; object-fit: contain; }
+    .editor-stage video { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+    .editor-preview-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+    .editor-stage .stage-caption, .editor-stage .stage-subcaption { visibility:hidden; }
+    .stage-empty { z-index:2; }
     .stage-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px; color: #d6ddd7; text-align: center; }
     .stage-empty .icon { width: 28px; height: 28px; color: var(--lime); }
     .stage-empty strong { font-size: 11px; }
@@ -398,6 +401,26 @@
     .toast { position: fixed; z-index: 60; left: 50%; bottom: 28px; transform: translate(-50%, 16px); max-width: min(90vw, 520px); padding: 11px 15px; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow); font-size: 11px; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
     .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; color: var(--muted-2); font-size: 9px; }
+    /* Creator profile and TikTok statistics */
+    .creator-snapshot { padding: 16px; margin-bottom: 16px; }
+    .snapshot-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .snapshot-head p { color:var(--muted); font-size:10px; margin:4px 0 0; }
+    .creator-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:13px; }
+    .creator-stat { min-width:0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--surface-2); }
+    .creator-stat strong { display:block; color:var(--ink); font-size:18px; overflow-wrap:anywhere; }
+    .creator-stat span { color:var(--muted); font-size:9px; }
+    .creator-layout { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(270px,.85fr); gap:16px; align-items:start; }
+    .creator-card { padding:20px; min-width:0; }
+    .creator-identity { display:flex; align-items:center; gap:13px; }
+    .creator-avatar { width:60px; height:60px; flex:none; object-fit:cover; border-radius:50%; background:var(--green-soft); }
+    .creator-name { min-width:0; overflow-wrap:anywhere; }
+    .creator-name h2 { margin:0; font-size:20px; }
+    .creator-name span,.creator-description { color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
+    .creator-description { white-space:pre-wrap; }
+    .creator-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:15px; }
+    .share-link-field { margin-top:12px; }
+    @media (max-width:760px) { .creator-layout { grid-template-columns:1fr; } }
+    @media (max-width:500px) { .creator-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     .mobile-nav { display: none; }
     @media (max-width: 1050px) {
       .app-shell { grid-template-columns: 218px minmax(0,1fr); }
@@ -511,6 +534,7 @@
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z" fill="currentColor"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 21a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-message" viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3-.5L4 20l1.5-4A7.3 7.3 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 12h.01M12 12h.01M16 12h.01" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></symbol>
   </svg>
   <div class="app-shell">
@@ -526,11 +550,12 @@
         <button class="nav-item" data-view="breakdown"><svg class="icon"><use href="#i-film"></use></svg><span class="nav-label-text">Break down a clip</span></button>
         <button class="nav-item" data-view="editor"><svg class="icon"><use href="#i-scissors"></use></svg><span class="nav-label-text">Edit workspace</span></button>
         <button class="nav-item" data-view="library"><svg class="icon"><use href="#i-book"></use></svg><span class="nav-label-text">Saved sessions</span></button>
+        <button class="nav-item" data-view="profile"><svg class="icon"><use href="#i-user"></use></svg><span class="nav-label-text">Creator profile</span></button>
       </nav>
       <div class="side-spacer"></div>
       <div class="side-note">
         <div class="side-note-top"><span class="status-dot"></span> FREE PROTOTYPE</div>
-        <p>Chats save on this device. AI needs private server setup; account sign-in and cloud sync are not connected.</p>
+        <p>Chats save on this device. AI and TikTok require separate private server setup; cloud sync is not connected.</p>
       </div>
       <div class="side-footer">
         <div class="avatar">CL</div>
@@ -548,7 +573,7 @@
         <div class="topbar-right">
           <span class="prototype-pill"><span class="status-dot"></span> PREVIEW BUILD</span>
           <button class="icon-button" id="theme-toggle" aria-label="Switch theme" title="Switch light or dark theme"><svg class="icon" id="theme-icon"><use href="#i-sun"></use></svg></button>
-          <button class="top-signin" data-auth>Sign in</button>
+          <button class="top-signin" data-go="profile">My profile</button>
         </div>
       </header>
 
@@ -563,6 +588,10 @@
             <button class="button" id="new-session"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> New session</button>
           </div>
 
+          <section class="panel creator-snapshot" aria-label="TikTok creator snapshot">
+            <div class="snapshot-head"><div><div class="panel-kicker">YOUR CREATOR SNAPSHOT</div><h3 id="dashboard-creator-name">TikTok not connected</h3><p id="dashboard-creator-time">Connect your TikTok in Creator profile to see authorized account stats.</p></div><button class="button small" data-go="profile">Creator profile ↗</button></div>
+            <div class="creator-stats"><div class="creator-stat"><strong id="dashboard-followers">—</strong><span>Followers</span></div><div class="creator-stat"><strong id="dashboard-likes">—</strong><span>Total likes</span></div><div class="creator-stat"><strong id="dashboard-videos">—</strong><span>Public videos</span></div><div class="creator-stat"><strong>—</strong><span>LIVE members · unavailable</span></div></div>
+          </section>
           <section class="hero-card" aria-label="Welcome to Cutline Studio">
             <div class="hero-copy">
               <div class="eyebrow"><span class="mini-line"></span> BUILT FOR THE NEXT CUT</div>
@@ -621,6 +650,8 @@
                 <button class="prompt-chip" data-prompt="Give me 3 sports-edit ideas for a player who just had a huge game." data-mode="brainstorm">3 ideas for a big game</button>
                 <button class="prompt-chip" data-prompt="Write punchy TikTok titles and a focused hashtag set for my next basketball edit." data-mode="titles">Titles + hashtags</button>
                 <button class="prompt-chip" data-prompt="Help me plan a 15-second edit with a hook, context, payoff and end-loop." data-mode="edit">Plan a 15-second cut</button>
+                <button class="prompt-chip" data-prompt="Create an original sports-edit storyboard, sound direction and a practical edit recipe using only the available controls." data-mode="edit">Storyboard + edit recipe</button>
+                <button class="prompt-chip" data-prompt="Write three hook options, on-screen text, a caption, and relevant hashtags. Separate facts from guesses and do not claim they are trending." data-mode="titles">Hook + caption package</button>
               </div>
               <p class="helper-note"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> AI requires server setup and your confirmation. A YouTube link does not download footage; use an authorized copy to make the edit.</p>
             </section>
@@ -699,11 +730,12 @@
                   </div>
                 </div>
                 <div class="coach-options">
+                  <label for="coach-engine"><span>AI engine</span><select class="select-field" id="coach-engine" aria-label="Choose AI engine"><option value="gemini">Gemini · video + text</option><option value="arena">Arena · text only</option></select></label>
                   <label><input type="checkbox" id="coach-research" disabled><span>Google Search research <b>(optional; may cost extra)</b></span></label>
-                  <label><input type="checkbox" id="coach-arena" disabled><span>Arena creative polish <b>(optional; separate access and costs)</b></span></label>
+                  <label><input type="checkbox" id="coach-arena" disabled><span>Arena creative director + edit recipe <b>(optional; separate access and costs)</b></span></label>
                 </div>
                 <p class="chat-disclaimer" id="coach-options-status">Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.</p>
-                <p class="chat-disclaimer">Messages and public links go to Google only after you confirm. For a fresh video analysis, paste its link again. YouTube videos are not downloaded; supply the same authorized file to edit.</p>
+                <p class="chat-disclaimer" id="coach-engine-note">Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.</p>
               </form>
             </section>
             <aside class="coach-side">
@@ -809,12 +841,14 @@
               <div class="editor-note" id="editor-suggestion-status" role="status" hidden></div>
               <div class="editor-stage-wrap">
                 <div class="editor-stage" id="editor-stage">
-                  <video id="editor-player" playsinline controls></video>
+                  <video id="editor-player" playsinline aria-hidden="true" tabindex="-1"></video>
+                  <canvas id="editor-preview-canvas" class="editor-preview-canvas" role="img" aria-label="Edited video preview"></canvas>
                   <div class="stage-empty" id="editor-empty"><svg class="icon"><use href="#i-film"></use></svg><strong>Your clip preview appears here</strong><span>Choose a local video to test framing, filters, text and audio.</span></div>
                   <div class="stage-caption" id="stage-caption" hidden></div>
                   <div class="stage-subcaption" id="stage-subcaption" hidden></div>
                 </div>
               </div>
+              <div class="mini-actions" style="margin-top:10px"><button class="button small" id="toggle-preview" type="button">▶ Play / pause</button><button class="button small" id="restart-preview" type="button">↺ Back to trim start</button></div>
               <div class="timeline">
                 <div class="timeline-head"><span>EDIT TIMELINE · LIVE PREVIEW</span><span id="time-readout">00:00 / 00:00</span></div>
                 <input id="scrub-range" class="scrub-range" type="range" min="0" max="100" value="0" aria-label="Scrub through clip">
@@ -834,6 +868,12 @@
                 </div>
                 <div class="field-pair"><div><label class="field-label" for="fit-mode">FRAME FIT</label><select class="select-field full-select" id="fit-mode"><option value="cover">Fill canvas</option><option value="contain">Fit whole clip</option></select></div><div><label class="field-label" for="playback-speed">PLAYBACK SPEED</label><select class="select-field full-select" id="playback-speed"><option value="0.5">0.5× slow</option><option value="0.75">0.75×</option><option value="1" selected>1× normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2× fast</option></select></div></div>
                 <div class="mini-actions"><button class="button small" id="rotate-clip">↻ Rotate 90°</button><button class="button small" id="flip-clip">⇋ Flip horizontal</button><button class="button small" id="reset-transform">Reset frame</button></div>
+                <div class="slider-control"><label for="zoom-start">Start zoom <output id="zoom-start-value">100%</output></label><input class="control-range" id="zoom-start" type="range" min="50" max="250" value="100"></div>
+                <label class="check-control"><input id="zoom-animate" type="checkbox"> Animate zoom across the trim</label>
+                <div class="slider-control"><label for="zoom-end">End zoom <output id="zoom-end-value">100%</output></label><input class="control-range" id="zoom-end" type="range" min="50" max="250" value="100"></div>
+                <div class="slider-control"><label for="pan-x">Horizontal position <output id="pan-x-value">0%</output></label><input class="control-range" id="pan-x" type="range" min="-100" max="100" value="0"></div>
+                <div class="slider-control"><label for="pan-y">Vertical position <output id="pan-y-value">0%</output></label><input class="control-range" id="pan-y" type="range" min="-100" max="100" value="0"></div>
+                <p class="creator-description">The zoom moves smoothly between the start and end of the selected trim. This is not multi-point motion tracking.</p>
                 <label class="field-label" for="trim-in">TRIM POINTS · SECONDS</label>
                 <div class="trim-grid"><div><label class="field-label" for="trim-in" style="margin-top:0">IN</label><input class="number-field" id="trim-in" type="number" min="0" step="0.1" value="0"></div><div><label class="field-label" for="trim-out" style="margin-top:0">OUT</label><input class="number-field" id="trim-out" type="number" min="0" step="0.1" value="0"></div></div>
                 <div class="mini-actions"><button class="button small" id="set-in">Set in at playhead</button><button class="button small" id="set-out">Set out at playhead</button><button class="button small" id="play-trim"><svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview trim</button></div>
@@ -844,6 +884,8 @@
                 <div class="slider-control"><label for="brightness-range">Brightness <output id="brightness-value">100%</output></label><input class="control-range" id="brightness-range" type="range" min="60" max="150" value="100"></div>
                 <div class="slider-control"><label for="contrast-range">Contrast <output id="contrast-value">100%</output></label><input class="control-range" id="contrast-range" type="range" min="60" max="170" value="100"></div>
                 <div class="slider-control"><label for="saturation-range">Saturation <output id="saturation-value">100%</output></label><input class="control-range" id="saturation-range" type="range" min="0" max="180" value="100"></div>
+                <div class="slider-control"><label for="vignette-range">Edge vignette <output id="vignette-value">0%</output></label><input class="control-range" id="vignette-range" type="range" min="0" max="100" value="0"></div>
+                <div class="field-pair"><div><label class="field-label" for="fade-in">FADE IN · SOURCE SECONDS</label><select class="select-field full-select" id="fade-in"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div><div><label class="field-label" for="fade-out">FADE OUT · SOURCE SECONDS</label><select class="select-field full-select" id="fade-out"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div></div>
               </section>
               <section class="panel control-panel">
                 <div class="panel-kicker">TEXT LAYERS</div><h3>Make the story readable</h3><p>Draft two layers of on-screen text. The editor does not create captions from speech yet.</p>
@@ -851,12 +893,17 @@
                 <label class="field-label" for="subtitle-input">SUPPORTING LINE</label><input class="text-field" id="subtitle-input" maxlength="100" placeholder="Add context, a stat or your take…">
                 <div class="field-pair"><div><label class="field-label" for="title-position">HEADLINE POSITION</label><select class="select-field full-select" id="title-position"><option value="top">Upper third</option><option value="center">Center</option><option value="bottom" selected>Lower third</option></select></div><div><label class="field-label" for="title-size">TEXT SIZE</label><input class="control-range" id="title-size" type="range" min="18" max="48" value="30"></div></div>
                 <div class="field-pair color-pair"><div><label class="field-label" for="title-color">HEADLINE COLOR</label><input class="color-input" id="title-color" type="color" value="#ffffff"></div><div><label class="field-label" for="accent-color">ACCENT COLOR</label><input class="color-input" id="accent-color" type="color" value="#c8f276"></div><label class="check-control"><input id="text-backplate" type="checkbox" checked> Soft text backplate</label></div>
+                <div class="field-pair"><div><label class="field-label" for="text-animation">HEADLINE ENTRANCE</label><select class="select-field full-select" id="text-animation"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop in</option><option value="slide">Slide up</option></select></div><div><label class="field-label" for="text-start">SHOW AT · SEC AFTER TRIM IN</label><input class="number-field" id="text-start" type="number" min="0" max="3600" step="0.1" value="0"></div></div>
+                <label class="field-label" for="text-end">HIDE AT · SEC AFTER TRIM IN (0 = END)</label><input class="number-field" id="text-end" type="number" min="0" max="3600" step="0.1" value="0">
+                <p class="creator-description">Timing and entrance apply to the headline; the supporting line stays visible. Review readability before posting.</p>
               </section>
               <section class="panel control-panel">
                 <div class="panel-kicker">AUDIO MIX</div><h3>Keep the sound clean</h3><p>Set source volume and optionally add an audio file you are licensed to use.</p>
                 <div class="slider-control"><label for="source-volume">Clip audio <output id="source-volume-value">100%</output></label><input class="control-range" id="source-volume" type="range" min="0" max="100" value="100"></div>
                 <div class="music-row"><input type="file" id="music-file" accept="audio/*" hidden><button class="button small" id="choose-music" type="button"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add your audio</button><button class="button small" id="preview-music" type="button" hidden><svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview</button><button class="button small" id="remove-music" type="button" hidden>Remove</button><span id="music-label">No added audio</span></div>
                 <div class="slider-control"><label for="music-volume">Added audio <output id="music-volume-value">24%</output></label><input class="control-range" id="music-volume" type="range" min="0" max="100" value="24"></div>
+                <div class="field-pair"><div><label class="field-label" for="audio-fade-in">AUDIO FADE IN</label><select class="select-field full-select" id="audio-fade-in"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div><div><label class="field-label" for="audio-fade-out">AUDIO FADE OUT</label><select class="select-field full-select" id="audio-fade-out"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div></div>
+                <p class="creator-description">Audio fades affect both the clip and added audio, measured in source seconds from the trim.</p>
                 <audio id="music-player" hidden></audio>
                 <div class="editor-note"><b>Add a TikTok sound after export:</b> save your edit, open TikTok, upload it, then tap <b>Add sound</b>. Choose audio allowed for your account and use. TikTok’s catalog is not connected to Cutline.</div>
                 <a class="source-link" href="https://ads.tiktok.com/business/creativecenter/music/pc/en" target="_blank" rel="noopener noreferrer">Browse TikTok Commercial Music Library <span>↗</span></a>
@@ -873,6 +920,29 @@
             </aside>
           </div>
           <div class="page-footer"><span>Local editor · your source file is not uploaded.</span><span>Keep a separate original; browser storage and exports can be device-dependent.</span></div>
+        </section>
+
+        <section class="view" id="view-profile" aria-labelledby="profile-title">
+          <div class="page-head"><div><div class="eyebrow"><span class="mini-line"></span> CREATOR STUDIO</div><h1 id="profile-title">Your profile, your stats.</h1><p class="page-subtitle">Connect your own TikTok and choose whether to share your creator snapshot.</p></div><span class="soft-pill" id="tiktok-badge">CHECKING SETUP</span></div>
+          <div class="creator-layout">
+            <section class="panel creator-card">
+              <div class="creator-identity"><img class="creator-avatar" id="creator-avatar" alt="" hidden><span class="creator-avatar" id="creator-avatar-placeholder" aria-hidden="true" style="display:grid;place-items:center;color:var(--lime)"><svg class="icon"><use href="#i-user"></use></svg></span><div class="creator-name"><h2 id="creator-name">Your creator profile</h2><span id="creator-handle">No TikTok account connected</span></div></div>
+              <p class="creator-description" id="creator-bio" hidden></p>
+              <div class="creator-stats"><div class="creator-stat"><strong id="creator-followers">—</strong><span>Followers</span></div><div class="creator-stat"><strong id="creator-likes">—</strong><span>Total likes</span></div><div class="creator-stat"><strong id="creator-following">—</strong><span>Following</span></div><div class="creator-stat"><strong id="creator-videos">—</strong><span>Public videos</span></div></div>
+              <p class="creator-description" id="creator-updated">No TikTok data has been fetched.</p>
+              <p class="editor-note"><b>LIVE members/subscribers:</b> unavailable here. The authorized TikTok User Info API provides follower and total-like counts, not a verified LIVE member count. Counts can lag and refresh at most once per minute.</p>
+              <div class="creator-actions"><button class="button primary" id="connect-tiktok" disabled>Connect TikTok</button><button class="button small" id="refresh-tiktok" hidden>Refresh stats</button><button class="button small" id="disconnect-tiktok" hidden>Disconnect &amp; delete</button><a class="button small" id="creator-tiktok-link" target="_blank" rel="noopener noreferrer" hidden>View on TikTok ↗</a></div>
+              <p class="creator-description" id="tiktok-status" role="status">Checking TikTok setup…</p>
+            </section>
+            <section class="panel creator-card">
+              <div class="panel-kicker">SHARE BY CHOICE</div><h2>Make a public profile</h2>
+              <p class="creator-description">Sharing is off by default. If you publish, anyone with the link can see your TikTok display name, profile, bio, avatar and available counts. Stop sharing at any time; the old link will no longer work.</p>
+              <div class="creator-actions"><button class="button" id="publish-profile" disabled>Publish profile</button><button class="button small" id="unpublish-profile" hidden>Stop sharing</button></div>
+              <div class="share-link-field" id="share-link-box" hidden><label class="field-label" for="creator-share-url">PUBLIC PROFILE LINK</label><input class="text-field" id="creator-share-url" readonly><div class="creator-actions"><button class="button small" id="copy-profile-link">Copy link</button><a class="button small" id="view-public-profile" target="_blank" rel="noopener noreferrer">View public profile ↗</a></div></div>
+              <p class="creator-description">Connection requires an approved TikTok developer app, HTTPS and a private persistent data volume. Your TikTok authorization is stored encrypted on the server, not in this page. This is a personal preview, not full multi-user account management.</p>
+              <a class="source-link" href="https://developers.tiktok.com/docs/en/login-kit-overview" target="_blank" rel="noopener noreferrer">TikTok Login Kit requirements <span>↗</span></a>
+            </section>
+          </div>
         </section>
 
         <section class="view" id="view-library" aria-labelledby="library-title">
@@ -896,6 +966,7 @@
     <button class="nav-item" data-view="breakdown"><svg class="icon"><use href="#i-film"></use></svg><span>Clips</span></button>
     <button class="nav-item" data-view="editor"><svg class="icon"><use href="#i-scissors"></use></svg><span>Edit</span></button>
     <button class="nav-item" data-view="library"><svg class="icon"><use href="#i-book"></use></svg><span>History</span></button>
+    <button class="nav-item" data-view="profile"><svg class="icon"><use href="#i-user"></use></svg><span>Profile</span></button>
   </nav>
 
   <div class="modal-backdrop" id="auth-modal" hidden>
@@ -925,8 +996,8 @@
       <button class="icon-button modal-close" id="close-coach-consent" aria-label="Close Coach confirmation"><svg class="icon"><use href="#i-close"></use></svg></button>
       <span class="offline-badge">CONFIRM THIS REQUEST</span>
       <h2 id="coach-consent-title">Send this to AI Coach?</h2>
-      <p>Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.</p>
-      <div class="modal-notice"><b>Privacy and cost:</b> Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.</div>
+      <p id="coach-consent-intro">Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.</p>
+      <div class="modal-notice" id="coach-consent-privacy">Privacy and cost: Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.</div>
       <p id="coach-consent-extras" class="research-note"></p>
       <label class="check-control" style="align-items:flex-start;margin-top:12px"><input id="coach-consent" type="checkbox"><span>I understand what will be sent and have permission to submit it. I have checked any provider costs.</span></label>
       <button class="button primary" id="confirm-coach" type="button" disabled>Confirm and send</button>
@@ -1026,21 +1097,29 @@
         switchView('coach');
         document.getElementById('chat-input').value = prompt;
         if (coachInFlight) { showToast('A Coach request is already in progress.'); return; }
-        if (!aiConnection.coachReady) {
-          showToast('AI Coach is not configured. Nothing was sent; ask the owner to set up Gemini.');
+        const engine = document.getElementById('coach-engine').value === 'arena' ? 'arena' : 'gemini';
+        if ((engine === 'gemini' && !aiConnection.coachReady) || (engine === 'arena' && !aiConnection.arenaReady)) {
+          showToast('The selected AI engine is not configured. Nothing was sent.');
           return;
         }
         pendingCoach = {
           prompt,
+          engine,
           mode: mode || 'brainstorm',
           chatId: activeChat()?.id || null,
-          research: document.getElementById('coach-research').checked,
-          arena: document.getElementById('coach-arena').checked,
+          research: engine === 'gemini' && document.getElementById('coach-research').checked,
+          arena: engine === 'gemini' && document.getElementById('coach-arena').checked,
         };
+        document.getElementById('coach-consent-intro').textContent = engine === 'arena'
+          ? 'Your message and up to six recent chat messages will be sent to Arena as text. Arena will not receive or watch the video behind a link and cannot verify current trends.'
+          : 'Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.';
+        document.getElementById('coach-consent-privacy').textContent = engine === 'arena'
+          ? 'Privacy and cost: Arena and its model provider terms, quotas and possible charges apply. Do not send private information you do not want to share.'
+          : 'Privacy and cost: Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.';
         const extras = [];
         if (pendingCoach.research) extras.push('Google Search adds a second Gemini request and may incur additional charges. Search results and suggestions are shown only in this tab.');
-        if (pendingCoach.arena) extras.push('Arena will receive your message and the Gemini answer for creative polish. It requires separate API access and may charge separately; Arena does not watch the video.');
-        document.getElementById('coach-consent-extras').textContent = extras.join(' ') || 'No Search or Arena request is selected; title and hashtag ideas are not current research.';
+        if (pendingCoach.arena) extras.push('Arena will receive your message, up to six recent chat messages and the Gemini answer for creative direction. It requires separate API access and may charge separately; Arena does not watch the video.');
+        document.getElementById('coach-consent-extras').textContent = extras.join(' ') || (engine === 'arena' ? 'No Gemini or Google Search request is selected. Switch to Gemini mode to analyze a public YouTube video.' : 'No Search or Arena request is selected; title and hashtag ideas are not current research.');
         document.getElementById('coach-consent').checked = false;
         document.getElementById('confirm-coach').disabled = true;
         document.getElementById('coach-consent-modal').hidden = false;
@@ -1059,7 +1138,7 @@
       document.getElementById('coach-consent-modal').addEventListener('click', event => { if (event.target.id === 'coach-consent-modal') closeCoachConsent(); });
       document.getElementById('coach-consent').addEventListener('change', event => { document.getElementById('confirm-coach').disabled = !event.target.checked || coachInFlight; });
       document.getElementById('confirm-coach').addEventListener('click', async () => {
-        if (!pendingCoach || coachInFlight || !document.getElementById('coach-consent').checked || !aiConnection.coachReady) return;
+        if (!pendingCoach || coachInFlight || !document.getElementById('coach-consent').checked || (pendingCoach.engine === 'gemini' ? !aiConnection.coachReady : !aiConnection.arenaReady)) return;
         const request = pendingCoach;
         let chat = request.chatId ? state.chats.find(item => item.id === request.chatId) : null;
         if (request.chatId && !chat) { closeCoachConsent(); showToast('That chat no longer exists. Start a new chat and try again.'); return; }
@@ -1077,19 +1156,21 @@
           const response = await fetch('/api/coach', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Coach-Consent': 'yes' },
-            body: JSON.stringify({ prompt: request.prompt, mode: request.mode, history, research: request.research, arena: request.arena }),
+            body: JSON.stringify({ prompt: request.prompt, engine: request.engine, mode: request.mode, history, research: request.research, arena: request.arena }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `Coach request failed (${response.status}).`);
           if (typeof payload.answer !== 'string' || !payload.answer.trim()) throw new Error('The Coach returned no readable answer.');
           const message = addMessageToChat(chat, 'assistant', payload.answer, {
             kind: 'ai',
+            provider: payload.provider === 'arena' ? 'arena' : 'gemini',
             clips: Array.isArray(payload.clips) ? payload.clips : [],
             youtubeUrl: typeof payload.youtubeUrl === 'string' ? payload.youtubeUrl : null,
             researchAttempted: request.research,
             hasResearch: !!payload.research,
             researchError: typeof payload.researchError === 'string' ? payload.researchError : '',
             arenaText: typeof payload.arena === 'string' ? payload.arena : '',
+            arenaRecipe: payload.arenaRecipe && typeof payload.arenaRecipe === 'object' ? payload.arenaRecipe : null,
             arenaError: typeof payload.arenaError === 'string' ? payload.arenaError : '',
           });
           if (message && payload.research) researchByMessage.set(message.id, payload.research);
@@ -1237,7 +1318,7 @@
           const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = message.role === 'user' ? 'YOU' : 'CL';
           const body = document.createElement('div'); body.className = 'message-body';
           const meta = document.createElement('div'); meta.className = 'message-meta';
-          meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : (message.kind === 'ai' ? 'Gemini Coach · verify details' : (message.kind === 'error' ? 'Request status' : 'Saved Coach note / preview'));
+          meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : (message.kind === 'ai' ? (message.provider === 'arena' ? 'Arena Coach · text only' : 'Gemini Coach · verify details') : (message.kind === 'error' ? 'Request status' : 'Saved Coach note / preview'));
           const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = message.text;
           body.append(meta, bubble);
           if (message.kind === 'ai' && Array.isArray(message.clips) && message.clips.length) {
@@ -1257,12 +1338,21 @@
             renderResearch(body, message);
             if (message.arenaText || message.arenaError) {
               const arena = document.createElement('section'); arena.className = 'research-result';
-              const title = document.createElement('h4'); title.textContent = 'ARENA CREATIVE POLISH · TEXT ONLY';
+              const title = document.createElement('h4'); title.textContent = 'ARENA CREATIVE DIRECTOR · TEXT ONLY';
               const text = document.createElement('div'); text.className = 'research-text'; text.textContent = message.arenaText || message.arenaError;
               const note = document.createElement('p'); note.className = 'research-note'; note.textContent = 'Arena received the request and Gemini’s unverified answer; it did not independently view the video or check trends.';
-              arena.append(title, text, note); body.appendChild(arena);
+              arena.append(title, text, note);
+              if (message.arenaRecipe && typeof message.arenaRecipe === 'object') {
+                const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Arena edit recipe';
+                apply.addEventListener('click', () => applyArenaRecipe(message.arenaRecipe)); arena.appendChild(apply);
+              }
+              body.appendChild(arena);
             }
             const actions = document.createElement('div'); actions.className = 'message-actions';
+            if (message.provider === 'arena' && message.arenaRecipe && typeof message.arenaRecipe === 'object') {
+              const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Arena edit recipe';
+              apply.addEventListener('click', () => applyArenaRecipe(message.arenaRecipe)); actions.appendChild(apply);
+            }
             const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'button small'; copy.textContent = 'Copy ideas';
             copy.addEventListener('click', () => copyCoachText([message.text, message.arenaText].filter(Boolean).join('\n\n')));
             actions.appendChild(copy); body.appendChild(actions);
@@ -1329,10 +1419,12 @@
         currentView = view;
         document.querySelectorAll('.view').forEach(section => section.classList.toggle('active', section.id === 'view-' + view));
         document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
-        const names = { studio: 'Studio', coach: 'AI Coach', breakdown: 'Break down a clip', editor: 'Edit workspace', library: 'Saved sessions' };
+        const names = { studio: 'Studio', coach: 'AI Coach', breakdown: 'Break down a clip', editor: 'Edit workspace', library: 'Saved sessions', profile: 'Creator profile' };
         document.getElementById('crumb-current').textContent = names[view] || 'Studio';
         if (view === 'coach') renderChat();
         if (view === 'library') renderSessions();
+        if (view === 'profile' && creatorConfigured) loadTikTokProfile(true);
+        if (view === 'editor') requestAnimationFrame(paintEditorPreview);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
       document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
@@ -1572,24 +1664,40 @@
       const aiConfirmButton = document.getElementById('confirm-ai-review');
       const defaultAIUploadLimit = 14 * 1024 * 1024;
       let aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
+      let creatorConfigured = false;
+      let creatorData = null;
+      let creatorBusy = false;
+      let creatorAuthorizationNotice = '';
       let aiReviewInFlight = false;
       let aiReviewConsentFile = null;
       function updateCoachConnection() {
-        const configured = aiConnection.coachReady;
-        document.getElementById('coach-ai-badge').textContent = configured ? 'GEMINI CONFIGURED' : 'AI SETUP NEEDED';
-        document.getElementById('starter-ai-badge').textContent = configured ? 'GEMINI CONFIGURED' : 'AI SETUP NEEDED';
+        const engine = document.getElementById('coach-engine');
+        engine.querySelector('[value="gemini"]').disabled = !aiConnection.coachReady;
+        engine.querySelector('[value="arena"]').disabled = !aiConnection.arenaReady;
+        if (!aiConnection.coachReady && aiConnection.arenaReady) engine.value = 'arena';
+        if (!aiConnection.arenaReady && aiConnection.coachReady) engine.value = 'gemini';
+        engine.disabled = !aiConnection.coachReady && !aiConnection.arenaReady;
+        const arenaOnly = engine.value === 'arena';
+        const badge = aiConnection.coachReady ? 'GEMINI CONFIGURED' : (aiConnection.arenaReady ? 'ARENA TEXT CONFIGURED' : 'AI SETUP NEEDED');
+        document.getElementById('coach-ai-badge').textContent = badge;
+        document.getElementById('starter-ai-badge').textContent = badge;
         const research = document.getElementById('coach-research');
         const arena = document.getElementById('coach-arena');
-        research.disabled = !aiConnection.researchReady; arena.disabled = !aiConnection.arenaReady;
+        research.disabled = arenaOnly || !aiConnection.researchReady;
+        arena.disabled = arenaOnly || !aiConnection.coachReady || !aiConnection.arenaReady;
         if (research.disabled) research.checked = false;
         if (arena.disabled) arena.checked = false;
         const available = [];
         if (aiConnection.researchReady) available.push('Google Search');
-        if (aiConnection.arenaReady) available.push('Arena polish');
-        document.getElementById('coach-options-status').textContent = (available.length
-          ? `${available.join(' and ')} configured, not connection-tested. Select only if you accept possible provider charges.`
-          : 'Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.');
+        if (aiConnection.arenaReady) available.push('Arena');
+        document.getElementById('coach-options-status').textContent = arenaOnly
+          ? 'Arena receives text only, not video. It cannot inspect a YouTube link or verify current trends. Provider access and costs apply.'
+          : (available.length ? `${available.join(' and ')} configured, not connection-tested. Select only if you accept possible provider charges.` : 'Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.');
+        document.getElementById('coach-engine-note').textContent = arenaOnly
+          ? 'Arena sees your text and recent conversation, not the video or current web trends. Switch to Gemini to analyze a public YouTube link.'
+          : 'Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.';
       }
+      document.getElementById('coach-engine').addEventListener('change', updateCoachConnection);
       async function refreshAIConnection() {
         const status = document.getElementById('ai-review-status');
         const detail = document.getElementById('ai-review-detail');
@@ -1608,6 +1716,9 @@
             maxVideoBytes: Number.isSafeInteger(limit) && limit > 0 ? limit : defaultAIUploadLimit,
           };
           updateCoachConnection();
+          creatorConfigured = data.tiktokReady === true;
+          renderTikTokProfile();
+          if (creatorConfigured) loadTikTokProfile(false);
           document.getElementById('ai-review-limit').textContent = `AI uploads are capped at ${humanSize(aiConnection.maxVideoBytes)}.`;
           if (aiConnection.ready) {
             badge.textContent = 'VIDEO AI CONFIGURED';
@@ -1623,6 +1734,7 @@
         } catch (_) {
           aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
           updateCoachConnection();
+          creatorConfigured = false; renderTikTokProfile();
           badge.textContent = 'VIDEO AI UNAVAILABLE';
           status.textContent = 'No AI service is connected';
           detail.textContent = 'The local scanner still works; the model endpoint is unavailable.';
@@ -1695,10 +1807,117 @@
         switchView('coach'); renderAll();
         showToast('AI report saved to Coach history on this device.');
       });
+      // TikTok data is opt-in, stays out of local chat history, and is only
+      // shared publicly after a separate confirmation.
+      function renderTikTokProfile() {
+        const connected = creatorData?.connected === true;
+        const p = connected ? creatorData.profile : null;
+        const element = id => document.getElementById(id);
+        element('tiktok-badge').textContent = connected ? 'TIKTOK CONNECTED' : (creatorConfigured ? 'READY TO CONNECT' : 'SETUP NEEDED');
+        element('connect-tiktok').hidden = connected;
+        element('connect-tiktok').disabled = !creatorConfigured;
+        element('refresh-tiktok').hidden = !connected;
+        element('disconnect-tiktok').hidden = !connected;
+        element('creator-name').textContent = p?.displayName || (connected ? 'TikTok creator' : 'Your creator profile');
+        element('creator-handle').textContent = p?.username ? '@' + p.username + (p.verified ? ' · Verified' : '') : (connected ? 'Connected to TikTok' : 'No TikTok account connected');
+        element('dashboard-creator-name').textContent = p?.displayName || (connected ? 'TikTok connected' : 'TikTok not connected');
+        element('creator-bio').textContent = p?.bio || ''; element('creator-bio').hidden = !p?.bio;
+        element('creator-avatar').hidden = !p?.avatarUrl; element('creator-avatar-placeholder').hidden = !!p?.avatarUrl;
+        if (p?.avatarUrl) element('creator-avatar').src = p.avatarUrl; else element('creator-avatar').removeAttribute('src');
+        for (const key of ['followers','likes','following','videos']) {
+          const value = Number.isSafeInteger(p?.[key]) ? p[key].toLocaleString() : '—';
+          element('creator-' + key).textContent = value;
+          const dashboard = element('dashboard-' + key); if (dashboard) dashboard.textContent = value;
+        }
+        const time = p?.updatedAt && Number.isFinite(p.updatedAt) ? new Date(p.updatedAt).toLocaleString() : '';
+        const message = time ? 'Last fetched from TikTok: ' + time + '. Counts may lag.' : (connected ? 'No TikTok snapshot is available yet. Try refresh or reconnect.' : 'No TikTok data has been fetched.');
+        element('creator-updated').textContent = message + (connected && !creatorData.statsPermission ? ' Statistics permission was not granted.' : '') + (connected && creatorData.refreshFailed ? ' TikTok could not confirm the latest data; public details are temporarily hidden. Check authorization or try again later.' : '');
+        element('dashboard-creator-time').textContent = connected ? message : 'Connect your TikTok in Creator profile to see authorized account stats.';
+        element('creator-tiktok-link').hidden = !p?.profileUrl;
+        if (p?.profileUrl) element('creator-tiktok-link').href = p.profileUrl; else element('creator-tiktok-link').removeAttribute('href');
+        element('publish-profile').disabled = !connected || !!creatorData?.shared;
+        element('publish-profile').hidden = !!creatorData?.shared;
+        element('unpublish-profile').hidden = !creatorData?.shared;
+        element('share-link-box').hidden = !creatorData?.shared;
+        if (creatorData?.shared && /^[A-Za-z0-9_-]{24}$/.test(creatorData.shareId)) {
+          const link = location.origin + '/p/' + creatorData.shareId;
+          element('creator-share-url').value = link; element('view-public-profile').href = link;
+        } else { element('creator-share-url').value = ''; element('view-public-profile').removeAttribute('href'); }
+        element('tiktok-status').textContent = connected ? 'Connected. Only your authorized TikTok profile and available counts are used.' : (creatorAuthorizationNotice || (!creatorConfigured
+          ? 'TikTok setup is needed: approved developer app, HTTPS, server secrets and persistent private storage. No request has been sent.'
+          : 'Ready to connect. TikTok will ask you to approve profile and statistics access.'));
+      }
+      async function tiktokRequest(path, body) {
+        const options = { method: 'POST', headers: { 'X-Cutline-Tiktok': 'yes' }, cache: 'no-store' };
+        if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
+        const response = await fetch(path, options);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'TikTok profile request failed.');
+        return result;
+      }
+      async function loadTikTokProfile(refresh) {
+        if (!creatorConfigured || creatorBusy) return;
+        creatorBusy = true;
+        try {
+          let data;
+          if (refresh) data = await tiktokRequest('/api/tiktok/refresh');
+          else {
+            const response = await fetch('/api/tiktok/profile', { cache:'no-store' });
+            data = await response.json(); if (!response.ok) throw new Error(data.error || 'Profile is unavailable.');
+          }
+          creatorData = data; renderTikTokProfile();
+        } catch (error) { document.getElementById('tiktok-status').textContent = error.message || 'TikTok profile is unavailable.'; }
+        finally { creatorBusy = false; }
+      }
+      document.getElementById('connect-tiktok').addEventListener('click', async () => {
+        if (!creatorConfigured || creatorBusy) return;
+        if (!confirm('Continue to TikTok? TikTok will ask to share your profile and account statistics with this app. The connection is private until you choose to publish a profile.')) return;
+        creatorBusy = true; creatorAuthorizationNotice = '';
+        try {
+          const result = await tiktokRequest('/api/tiktok/connect');
+          const url = new URL(result.url);
+          if (url.protocol !== 'https:' || url.hostname !== 'www.tiktok.com' || url.pathname !== '/v2/auth/authorize/') throw new Error('TikTok authorization link was invalid.');
+          location.assign(url.href);
+        } catch (error) { document.getElementById('tiktok-status').textContent = error.message || 'Could not start TikTok authorization.'; creatorBusy = false; }
+      });
+      document.getElementById('refresh-tiktok').addEventListener('click', () => loadTikTokProfile(true));
+      async function changeSharing(share) {
+        if (!creatorData?.connected || creatorBusy) return;
+        if (share && !confirm('Publish this profile? Anyone with the link can view your TikTok name, avatar, bio and available counts.')) return;
+        creatorBusy = true;
+        try { creatorData = await tiktokRequest('/api/tiktok/share', { share }); renderTikTokProfile(); showToast(share ? 'Profile published. Share the link when ready.' : 'Profile sharing stopped. The old link no longer works.'); }
+        catch (error) { showToast(error.message || 'Could not change sharing.'); }
+        finally { creatorBusy = false; }
+      }
+      document.getElementById('publish-profile').addEventListener('click', () => changeSharing(true));
+      document.getElementById('unpublish-profile').addEventListener('click', () => changeSharing(false));
+      document.getElementById('copy-profile-link').addEventListener('click', async () => {
+        const input = document.getElementById('creator-share-url');
+        try { await navigator.clipboard.writeText(input.value); showToast('Public profile link copied.'); }
+        catch (_) { input.focus(); input.select(); showToast('Select and copy your profile link.'); }
+      });
+      document.getElementById('disconnect-tiktok').addEventListener('click', async () => {
+        if (creatorBusy || !confirm('Disconnect TikTok, stop sharing and delete the stored profile and tokens from this server?')) return;
+        creatorBusy = true;
+        try {
+          const result = await tiktokRequest('/api/tiktok/disconnect'); creatorData = null; renderTikTokProfile();
+          if (result.revocationFailed) document.getElementById('tiktok-status').textContent = 'Local data was deleted, but TikTok could not confirm revocation. Remove access in your TikTok account settings too.';
+          else showToast('TikTok disconnected and stored data deleted.');
+        } catch (error) { showToast(error.message || 'Could not disconnect TikTok.'); }
+        finally { creatorBusy = false; }
+      });
+      setInterval(() => { if (!document.hidden && creatorData?.connected && (currentView === 'profile' || currentView === 'studio')) loadTikTokProfile(true); }, 60_000);
+      const tiktokResult = new URL(location.href).searchParams.get('tiktok');
+      if (tiktokResult) {
+        const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete('tiktok'); history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+        switchView('profile');
+        if (tiktokResult !== 'connected') { creatorAuthorizationNotice = 'TikTok authorization was not completed. Check app approval and callback setup, then try again.'; document.getElementById('tiktok-status').textContent = creatorAuthorizationNotice; }
+      }
       refreshAIConnection();
 
       // Browser-native editing: trim, crop, transform, grading, text, audio and real-time export.
       const stage = document.getElementById('editor-stage');
+      const previewCanvas = document.getElementById('editor-preview-canvas');
       const overlayInput = document.getElementById('overlay-input');
       const subtitleInput = document.getElementById('subtitle-input');
       const caption = document.getElementById('stage-caption');
@@ -1721,6 +1940,17 @@
       let audioGraph = null;
       let isExporting = false;
       let exportPreparing = false;
+      let lockedEditorControls = [];
+      function lockEditorControls() {
+        lockedEditorControls = [...document.querySelectorAll('#view-editor input, #view-editor select, #view-editor button')]
+          .filter(control => control.id !== 'cancel-export' && control.id !== 'editor-export')
+          .map(control => ({ control, disabled: control.disabled }));
+        lockedEditorControls.forEach(({ control }) => { control.disabled = true; });
+      }
+      function unlockEditorControls() {
+        lockedEditorControls.forEach(({ control, disabled }) => { control.disabled = disabled; });
+        lockedEditorControls = [];
+      }
 
       function timeLabel(seconds) {
         if (!Number.isFinite(seconds)) return '00:00';
@@ -1749,6 +1979,14 @@
         subcaption.textContent = subtitleInput.value.trim();
         subcaption.hidden = !subtitleInput.value.trim();
         subcaption.style.color = document.getElementById('accent-color').value;
+        paintEditorPreview();
+      }
+      function paintEditorPreview() {
+        const width = Math.round(stage.clientWidth), height = Math.round(stage.clientHeight);
+        if (!width || !height) return;
+        if (previewCanvas.width !== width || previewCanvas.height !== height) { previewCanvas.width = width; previewCanvas.height = height; }
+        const context = previewCanvas.getContext('2d');
+        if (context) drawEditorFrame(context, width, height);
       }
       function setOutput(id, value) { document.getElementById(id).textContent = value + '%'; }
       function highlightPreset(name) {
@@ -1760,6 +1998,7 @@
         stage.classList.remove('ratio-square', 'ratio-wide');
         if (editorRatio === 'square') stage.classList.add('ratio-square');
         if (editorRatio === 'wide') stage.classList.add('ratio-wide');
+        requestAnimationFrame(paintEditorPreview);
       }));
       document.querySelectorAll('.preset-button').forEach(button => button.addEventListener('click', () => {
         activeTone = button.dataset.preset;
@@ -1774,20 +2013,56 @@
           activeTone = 'custom'; highlightPreset(''); updateStage();
         });
       });
-      [overlayInput, subtitleInput, document.getElementById('title-color'), document.getElementById('accent-color'), document.getElementById('title-position'), document.getElementById('title-size'), document.getElementById('text-backplate')].forEach(control => {
+      [overlayInput, subtitleInput, ...['title-color','accent-color','title-position','title-size','text-backplate','text-animation','text-start','text-end','zoom-animate','fade-in','fade-out','trim-in','trim-out'].map(id => document.getElementById(id))].forEach(control => {
         control.addEventListener('input', updateStage); control.addEventListener('change', updateStage);
       });
+      [['zoom-start','zoom-start-value'],['zoom-end','zoom-end-value'],['pan-x','pan-x-value'],['pan-y','pan-y-value'],['vignette-range','vignette-value']].forEach(([id, output]) => {
+        document.getElementById(id).addEventListener('input', event => { setOutput(output, event.target.value); updateStage(); });
+      });
+      window.addEventListener('resize', paintEditorPreview);
       document.getElementById('fit-mode').addEventListener('change', updateStage);
       document.getElementById('playback-speed').addEventListener('change', () => { editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1; });
       document.getElementById('rotate-clip').addEventListener('click', () => { clipRotation = (clipRotation + 90) % 360; updateStage(); });
       document.getElementById('flip-clip').addEventListener('click', () => { clipFlipX = !clipFlipX; updateStage(); showToast(clipFlipX ? 'Horizontal flip on.' : 'Horizontal flip off.'); });
-      document.getElementById('reset-transform').addEventListener('click', () => { clipRotation = 0; clipFlipX = false; document.getElementById('fit-mode').value = 'cover'; updateStage(); showToast('Frame transform reset.'); });
+      document.getElementById('reset-transform').addEventListener('click', () => {
+        clipRotation = 0; clipFlipX = false; document.getElementById('fit-mode').value = 'cover';
+        ['zoom-start','zoom-end'].forEach(id => { document.getElementById(id).value = 100; setOutput(id + '-value', 100); });
+        ['pan-x','pan-y'].forEach(id => { document.getElementById(id).value = 0; setOutput(id + '-value', 0); });
+        document.getElementById('zoom-animate').checked = false; updateStage(); showToast('Frame transform reset.');
+      });
+
+      function applyArenaRecipe(recipe) {
+        if (isExporting || exportPreparing || !recipe || typeof recipe !== 'object') { showToast('Finish the export before changing the edit.'); return; }
+        const safe = {};
+        for (const [key, max] of [['headline',80],['supportingLine',100]]) if (typeof recipe[key] === 'string') safe[key] = recipe[key].slice(0,max);
+        for (const [key, values] of Object.entries({ titlePosition:['top','center','bottom'], titleAnimation:['none','fade','pop','slide'], colorPreset:['clean','punch','warm','mono'] })) if (values.includes(recipe[key])) safe[key] = recipe[key];
+        for (const [key, min, max] of [['zoomStart',50,250],['zoomEnd',50,250],['panX',-100,100],['panY',-100,100],['vignette',0,100]]) if (typeof recipe[key] === 'number' && Number.isFinite(recipe[key]) && recipe[key] >= min && recipe[key] <= max) safe[key] = Math.round(recipe[key]);
+        for (const [key, values] of [['fadeIn',[0,.5,1,2]],['fadeOut',[0,.5,1,2]],['audioFadeIn',[0,.5,1,2]],['audioFadeOut',[0,.5,1,2]],['speed',[.5,.75,1,1.25,1.5,2]]]) if (typeof recipe[key] === 'number' && values.includes(recipe[key])) safe[key] = recipe[key];
+        if (typeof recipe.animateZoom === 'boolean') safe.animateZoom = recipe.animateZoom;
+        if (!Object.keys(safe).length) { showToast('This Arena response has no supported edit settings.'); return; }
+        const summary = Object.entries(safe).map(([key,value]) => `${key}: ${String(value)}`).join('\n');
+        if (!confirm('Arena suggested these editable settings:\n\n' + summary + '\n\nApply them? Existing values for these controls will be replaced. Arena did not see your local video.')) return;
+        if (safe.colorPreset) document.querySelector(`.preset-button[data-preset="${safe.colorPreset}"]`).click();
+        const mapping = { headline:'overlay-input', supportingLine:'subtitle-input', titlePosition:'title-position', titleAnimation:'text-animation', zoomStart:'zoom-start', zoomEnd:'zoom-end', panX:'pan-x', panY:'pan-y', vignette:'vignette-range', fadeIn:'fade-in', fadeOut:'fade-out', audioFadeIn:'audio-fade-in', audioFadeOut:'audio-fade-out', speed:'playback-speed' };
+        for (const [key, id] of Object.entries(mapping)) if (Object.hasOwn(safe, key)) {
+          const control = document.getElementById(id); control.value = String(safe[key]);
+          control.dispatchEvent(new Event('input', { bubbles:true })); control.dispatchEvent(new Event('change', { bubbles:true }));
+        }
+        if (Object.hasOwn(safe, 'animateZoom')) document.getElementById('zoom-animate').checked = safe.animateZoom;
+        updateStage(); switchView('editor'); showToast('Arena recipe applied. Preview and adjust before exporting.');
+      }
 
       const sourceVolume = document.getElementById('source-volume');
       const musicVolume = document.getElementById('music-volume');
       function updateAudioLevels() {
-        const sourceLevel = Number(sourceVolume.value) / 100;
-        const musicLevel = Number(musicVolume.value) / 100;
+        const start = Math.max(0, sliderValue('trim-in'));
+        const end = sliderValue('trim-out') || editorPlayer.duration || start;
+        const time = editorPlayer.currentTime || 0;
+        const fadeIn = sliderValue('audio-fade-in'), fadeOut = sliderValue('audio-fade-out');
+        const clamp = value => Math.min(1, Math.max(0, value));
+        const fade = (!editorPlayer.paused || isExporting) ? Math.min(fadeIn ? clamp((time-start)/fadeIn) : 1, fadeOut ? clamp((end-time)/fadeOut) : 1) : 1;
+        const sourceLevel = Number(sourceVolume.value) / 100 * fade;
+        const musicLevel = Number(musicVolume.value) / 100 * fade;
         document.getElementById('source-volume-value').textContent = sourceVolume.value + '%';
         document.getElementById('music-volume-value').textContent = musicVolume.value + '%';
         if (audioGraph) {
@@ -1824,6 +2099,8 @@
       }
       sourceVolume.addEventListener('input', updateAudioLevels);
       musicVolume.addEventListener('input', updateAudioLevels);
+      document.getElementById('audio-fade-in').addEventListener('change', updateAudioLevels);
+      document.getElementById('audio-fade-out').addEventListener('change', updateAudioLevels);
       document.getElementById('choose-music').addEventListener('click', () => musicInput.click());
       musicInput.addEventListener('change', () => {
         if (isExporting || exportPreparing) { musicInput.value = ''; showToast('Finish or cancel the export before changing audio.'); return; }
@@ -1874,8 +2151,18 @@
         if (duration) scrub.value = Math.min(duration, editorPlayer.currentTime || 0);
       }
       editorPlayer.addEventListener('loadedmetadata', updateDuration);
+      editorPlayer.addEventListener('loadeddata', paintEditorPreview);
+      editorPlayer.addEventListener('seeked', paintEditorPreview);
+      let previewAnimation = 0;
+      editorPlayer.addEventListener('play', () => {
+        cancelAnimationFrame(previewAnimation);
+        const tick = () => { if (editorPlayer.paused || editorPlayer.ended) return; paintEditorPreview(); updateAudioLevels(); previewAnimation = requestAnimationFrame(tick); };
+        previewAnimation = requestAnimationFrame(tick);
+      });
+      editorPlayer.addEventListener('pause', () => { cancelAnimationFrame(previewAnimation); paintEditorPreview(); if (!isExporting && musicObjectUrl) musicPlayer.pause(); updateAudioLevels(); });
       editorPlayer.addEventListener('timeupdate', () => {
         updateDuration();
+        paintEditorPreview();
         const duration = editorPlayer.duration || 1;
         document.getElementById('playhead').style.left = (Math.max(0, Math.min(100, editorPlayer.currentTime / duration * 100))) + '%';
         if (isExporting) { updateExportProgress(); return; }
@@ -1883,7 +2170,14 @@
         if (!editorPlayer.paused && out > 0 && editorPlayer.currentTime >= out) editorPlayer.pause();
       });
       document.getElementById('scrub-range').addEventListener('input', event => {
-        if (currentFile && !isExporting) editorPlayer.currentTime = Number(event.target.value) || 0;
+        if (currentFile && !isExporting) {
+          editorPlayer.currentTime = Number(event.target.value) || 0;
+          if (musicObjectUrl && !musicPlayer.paused && Number.isFinite(musicPlayer.duration) && musicPlayer.duration > 0) {
+            const start = Math.max(0, sliderValue('trim-in'));
+            const speed = Number(document.getElementById('playback-speed').value) || 1;
+            musicPlayer.currentTime = Math.max(0, editorPlayer.currentTime - start) / speed % musicPlayer.duration;
+          }
+        }
       });
       document.getElementById('set-in').addEventListener('click', () => {
         if (!currentFile) { showToast('Add a local clip first.'); return; }
@@ -1895,14 +2189,32 @@
         document.getElementById('trim-out').value = (editorPlayer.currentTime || 0).toFixed(1);
         showToast('Trim out-point set at the playhead.');
       });
-      document.getElementById('play-trim').addEventListener('click', async () => {
+      async function playEditorPreview(restart) {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export first.'); return; }
         if (!currentFile) { showToast('Add a local clip first.'); return; }
         const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
         const out = Number(document.getElementById('trim-out').value) || editorPlayer.duration || 0;
         if (out <= start) { showToast('The out-point should be after the in-point.'); return; }
+        if (!restart && !editorPlayer.paused) { editorPlayer.pause(); return; }
         editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1;
-        editorPlayer.currentTime = start;
-        try { await editorPlayer.play(); } catch (_) { showToast('Tap play on the preview to start playback.'); }
+        if (restart || editorPlayer.currentTime < start || editorPlayer.currentTime >= out) editorPlayer.currentTime = start;
+        try {
+          if (audioGraph) await audioGraph.context.resume();
+          if (musicObjectUrl) {
+            const offset = Math.max(0, editorPlayer.currentTime - start) / editorPlayer.playbackRate;
+            if (Number.isFinite(musicPlayer.duration) && musicPlayer.duration > 0) musicPlayer.currentTime = offset % musicPlayer.duration;
+            else musicPlayer.currentTime = 0;
+            musicPlayer.loop = true;
+            try { await musicPlayer.play(); } catch (_) { showToast('Added audio could not start in preview. Check it before export.'); }
+          }
+          await editorPlayer.play();
+        } catch (_) { showToast('This browser could not start video preview.'); }
+      }
+      document.getElementById('play-trim').addEventListener('click', () => playEditorPreview(true));
+      document.getElementById('toggle-preview').addEventListener('click', () => playEditorPreview(false));
+      document.getElementById('restart-preview').addEventListener('click', () => {
+        if (!currentFile || isExporting || exportPreparing) return;
+        editorPlayer.pause(); editorPlayer.currentTime = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
       });
 
       function getCanvasSize() {
@@ -1942,6 +2254,15 @@
         context.restore();
       }
       function drawEditorFrame(context, width, height) {
+        const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
+        const start = Math.max(0, sliderValue('trim-in'));
+        const end = Math.max(start, sliderValue('trim-out') || editorPlayer.duration || start);
+        const elapsed = Math.max(0, (editorPlayer.currentTime || 0) - start);
+        const remaining = Math.max(0, end - (editorPlayer.currentTime || 0));
+        const progress = end > start ? clamp(elapsed / (end - start), 0, 1) : 0;
+        const zoomFrom = sliderValue('zoom-start') / 100;
+        const zoomTo = document.getElementById('zoom-animate').checked ? sliderValue('zoom-end') / 100 : zoomFrom;
+        const zoom = clamp(zoomFrom + (zoomTo - zoomFrom) * progress, .5, 2.5);
         context.save(); context.clearRect(0,0,width,height); context.fillStyle = '#050707'; context.fillRect(0,0,width,height);
         const videoWidth = editorPlayer.videoWidth || 0, videoHeight = editorPlayer.videoHeight || 0;
         if (videoWidth && videoHeight && editorPlayer.readyState >= 2) {
@@ -1951,17 +2272,41 @@
           const scale = document.getElementById('fit-mode').value === 'contain' ? Math.min(width / fitWidth, height / fitHeight) : Math.max(width / fitWidth, height / fitHeight);
           const drawWidth = videoWidth * scale, drawHeight = videoHeight * scale;
           if ('filter' in context) context.filter = selectedFilter();
-          context.translate(width / 2, height / 2); context.rotate(clipRotation * Math.PI / 180); context.scale(clipFlipX ? -1 : 1, 1);
+          context.translate(width / 2 + width * sliderValue('pan-x') / 200, height / 2 + height * sliderValue('pan-y') / 200);
+          context.rotate(clipRotation * Math.PI / 180); context.scale((clipFlipX ? -1 : 1) * zoom, zoom);
           context.drawImage(editorPlayer, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-          context.filter = 'none'; context.restore();
-        } else context.restore();
+        }
+        context.restore();
+        const vignette = clamp(sliderValue('vignette-range') / 100, 0, 1);
+        if (vignette) {
+          const gradient = context.createRadialGradient(width/2, height/2, Math.min(width,height)*.18, width/2, height/2, Math.hypot(width,height)*.6);
+          gradient.addColorStop(0, 'rgba(0,0,0,0)'); gradient.addColorStop(1, `rgba(0,0,0,${vignette * .9})`);
+          context.fillStyle = gradient; context.fillRect(0, 0, width, height);
+        }
         const titleSize = sliderValue('title-size') * (width / 280);
         const titlePosition = document.getElementById('title-position').value;
         const titleY = titlePosition === 'top' ? height * .16 : (titlePosition === 'center' ? height * .50 : height * .74);
-        const titleText = overlayInput.value.trim();
-        paintText(context, titleText, titleY, titleSize, document.getElementById('title-color').value, width * .86, document.getElementById('text-backplate').checked);
+        const textStart = Math.max(0, sliderValue('text-start'));
+        const textEnd = Math.max(0, sliderValue('text-end'));
+        const animation = document.getElementById('text-animation').value;
+        if (elapsed >= textStart && (!textEnd || elapsed < textEnd)) {
+          const intro = animation === 'none' ? 1 : clamp((elapsed - textStart) / .5, 0, 1);
+          context.save();
+          if (animation === 'fade') context.globalAlpha = intro;
+          if (animation === 'slide') context.translate(0, (1 - intro) * height * .07);
+          if (animation === 'pop') {
+            const factor = .7 + .3 * intro;
+            context.translate(width / 2, titleY); context.scale(factor, factor); context.translate(-width / 2, -titleY);
+            context.globalAlpha = intro;
+          }
+          paintText(context, overlayInput.value.trim(), titleY, titleSize, document.getElementById('title-color').value, width * .86, document.getElementById('text-backplate').checked);
+          context.restore();
+        }
         const subtitleText = subtitleInput.value.trim();
-        if (subtitleText) paintText(context, subtitleText, height * .90, Math.max(20, titleSize * .43), document.getElementById('accent-color').value, width * .84, true);
+        if (subtitleText) paintText(context, subtitleText, height * .90, Math.max(width * 20 / 720, titleSize * .43), document.getElementById('accent-color').value, width * .84, true);
+        const fadeIn = sliderValue('fade-in'), fadeOut = sliderValue('fade-out');
+        const visibility = Math.min(fadeIn ? clamp(elapsed / fadeIn, 0, 1) : 1, fadeOut ? clamp(remaining / fadeOut, 0, 1) : 1);
+        if (visibility < 1) { context.fillStyle = `rgba(0,0,0,${1-visibility})`; context.fillRect(0, 0, width, height); }
       }
       function updateExportProgress() {
         if (!isExporting) return;
@@ -2015,7 +2360,7 @@
         if (isExporting || exportPreparing) { showToast('An export is already in progress.'); return; }
         if (!currentFile) { showToast('Add a local video clip before exporting.'); return; }
         if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { showToast('This browser does not support local video export. Try an updated Safari or Chrome browser.'); exportStatus.textContent = 'Canvas recording is not supported in this browser.'; return; }
-        exportPreparing = true; exportButton.disabled = true;
+        exportPreparing = true; exportButton.disabled = true; lockEditorControls();
         try {
           try { await waitForDecodedFrame(editorPlayer); } catch (error) { showToast(error.message); return; }
           const duration = Number.isFinite(editorPlayer.duration) ? editorPlayer.duration : 0;
@@ -2051,7 +2396,8 @@
           document.getElementById('export-progress-fill').style.width = '0%';
           document.getElementById('export-progress-label').textContent = 'Preparing preview…';
           document.getElementById('export-progress-value').textContent = '0%';
-          exportStatus.textContent = `Exporting ${timeLabel(end-start)} in real time. Keep Cutline open on this page.`;
+          const speed = Number(document.getElementById('playback-speed').value) || 1;
+          exportStatus.textContent = `Exporting about ${timeLabel((end-start)/speed)} at ${speed}× speed. Keep Cutline open on this page.`;
           const chunks = [];
           recorder.addEventListener('dataavailable', event => { if (event.data && event.data.size) chunks.push(event.data); });
           recorder.addEventListener('error', event => { console.warn('MediaRecorder error', event.error); exportStatus.textContent = 'Export stopped because the browser reported a recording error.'; });
@@ -2060,7 +2406,7 @@
             document.getElementById('preview-music').innerHTML = '<svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview';
             if (tempAudioDestination) { try { audioGraph.videoGain.disconnect(tempAudioDestination); } catch (_) {} if (audioGraph.musicGain) { try { audioGraph.musicGain.disconnect(tempAudioDestination); } catch (_) {} } }
             stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
-            isExporting = false; exportButton.disabled = false; exportProgress.hidden = true;
+            isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; unlockEditorControls();
             if (exportCancelled) { exportStatus.textContent = 'Export cancelled. Your source clip is unchanged.'; showToast('Export cancelled.'); return; }
             const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' });
             if (!blob.size) { exportStatus.textContent = 'The browser returned an empty export. Try a shorter clip or different browser.'; showToast('No video data was returned.'); return; }
@@ -2072,6 +2418,7 @@
           paint();
           try {
             await seekToFrame(editorPlayer, start);
+            updateAudioLevels();
             if (exportCancelled) { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = 'Export cancelled before rendering began.'; showToast('Export cancelled.'); return; }
             editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1;
             if (musicObjectUrl) { musicPlayer.currentTime = 0; musicPlayer.loop = true; }
@@ -2092,7 +2439,7 @@
           showToast('The export could not be prepared.');
         } finally {
           exportPreparing = false;
-          if (!isExporting) exportButton.disabled = false;
+          if (!isExporting) { exportButton.disabled = false; unlockEditorControls(); }
         }
       }
       exportButton.addEventListener('click', startExport);

@@ -6,12 +6,14 @@ const http = require('node:http');
 const { createHash, timingSafeEqual } = require('node:crypto');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
+const { createTikTokService } = require('./tiktok');
 const {
   MAX_COACH_BODY_BYTES, normalizeCoachRequest, coachRequestPayload, parseCoachResponse,
   researchRequestPayload, parseResearchResponse, arenaRequestPayload, parseArenaResponse,
 } = require('./coach');
 
 const indexFile = path.join(__dirname, 'index.html');
+const publicProfileFile = path.join(__dirname, 'public-profile.html');
 const DEFAULT_MODEL = 'gemini-3.8-flash';
 // Inline requests also contain base64 and prompt overhead. Leave room below
 // Gemini's recommended 20 MB total request size for short video inputs.
@@ -52,7 +54,7 @@ function configuration(env) {
     // Optional billable features need both owner configuration and an explicit
     // per-request choice. Neither provider is contacted just by enabling them.
     researchReady: ready && env.CUTLINE_RESEARCH_ENABLED === 'true',
-    arenaReady: ready && env.CUTLINE_ARENA_ENABLED === 'true' && Boolean(arenaKey && arenaModel),
+    arenaReady: passwordValid && env.CUTLINE_ARENA_ENABLED === 'true' && Boolean(arenaKey && arenaModel),
     arenaKey, arenaModel,
   };
 }
@@ -149,6 +151,7 @@ function readLimitedBody(req, maxBytes, messages = {}) {
 
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
   const config = configuration(env);
+  const tiktok = createTikTokService({ env, passwordValid: config.passwordValid, fetchImpl, now });
   const reviewTimes = new Map();
   const coachTimes = new Map();
   const failedLogins = new Map();
@@ -377,7 +380,7 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
   }
 
   async function coach(req, res) {
-    if (!config.ready) return rejectRequest(req, res, 503, 'AI Coach is not configured on this server. Nothing was sent.');
+    if (!config.ready && !config.arenaReady) return rejectRequest(req, res, 503, 'AI Coach is not configured on this server. Nothing was sent.');
     if (!originMatchesRequest(req)) return rejectRequest(req, res, 403, 'This request did not come from the Cutline page. Nothing was sent.');
     if (req.headers['x-coach-consent'] !== 'yes') return rejectRequest(req, res, 400, 'Confirm the Coach privacy notice before sending.');
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
@@ -393,8 +396,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       try { input = JSON.parse(bytes.toString('utf8')); } catch (_) { return sendJson(res, 400, { error: 'The Coach request was not valid JSON.' }); }
       let request;
       try { request = normalizeCoachRequest(input); } catch (error) { return sendJson(res, 400, { error: error.message }); }
+      if (request.engine === 'gemini' && !config.ready) return sendJson(res, 503, { error: 'Gemini Coach is not configured. Nothing was sent.' });
+      if (request.engine === 'arena' && !config.arenaReady) return sendJson(res, 503, { error: 'Arena Coach is not configured. Nothing was sent.' });
+      if (request.engine === 'arena' && request.research) return sendJson(res, 400, { error: 'Google Search research requires Gemini mode. Nothing was sent.' });
       if (request.research && !config.researchReady) return sendJson(res, 403, { error: 'Live Google Search research is not enabled by the owner. No request was sent.' });
-      if (request.arena && !config.arenaReady) return sendJson(res, 403, { error: 'Arena creative polish is not configured by the owner. No request was sent.' });
+      if (request.arena && !config.arenaReady) return sendJson(res, 403, { error: 'Arena creative director is not configured by the owner. No request was sent.' });
 
       const address = req.socket.remoteAddress || 'unknown';
       const time = now();
@@ -408,6 +414,19 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
         if (coachTimes.size >= 1000) coachTimes.delete(coachTimes.keys().next().value);
       }
       coachTimes.set(address, time);
+
+      if (request.engine === 'arena') {
+        try {
+          const data = await callProvider('https://api.arena.ai/v1/chat/completions', { Authorization: `Bearer ${config.arenaKey}` }, arenaRequestPayload(request, '', config.arenaModel), res);
+          const result = parseArenaResponse(data);
+          if (!result.text) return sendJson(res, 502, { error: 'Arena returned no readable answer.' });
+          return sendJson(res, 200, { answer: result.text, clips: [], youtubeUrl: null, provider: 'arena', model: config.arenaModel, ...(result.recipe ? { arenaRecipe: result.recipe } : {}) });
+        } catch (error) {
+          if (res.destroyed || res.writableEnded) return;
+          const status = error.name === 'AbortError' ? 504 : (error.providerStatus === 429 ? 429 : 502);
+          return sendJson(res, status, { error: providerFailure(error, 'Arena Coach') });
+        }
+      }
 
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
       let data;
@@ -434,7 +453,9 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       if (request.arena && !res.destroyed) {
         try {
           const arenaData = await callProvider('https://api.arena.ai/v1/chat/completions', { Authorization: `Bearer ${config.arenaKey}` }, arenaRequestPayload(request, result.answer, config.arenaModel), res);
-          output.arena = parseArenaResponse(arenaData);
+          const arenaResult = parseArenaResponse(arenaData);
+          output.arena = arenaResult.text;
+          if (arenaResult.recipe) output.arenaRecipe = arenaResult.recipe;
           if (!output.arena) output.arenaError = 'Arena returned no readable creative polish.';
         } catch (error) {
           output.arenaError = providerFailure(error, 'Arena creative polish');
@@ -455,14 +476,38 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
   const server = http.createServer(async (req, res) => {
     // Clients can disconnect while a rejected request is being drained.
     req.on('error', () => {});
-    if (!authorize(req, res)) return;
-    let pathname;
+    let parsedUrl;
     try {
-      pathname = new URL(req.url || '/', 'http://cutline.local').pathname;
+      parsedUrl = new URL(req.url || '/', 'http://cutline.local');
     } catch (_) {
       return rejectRequest(req, res, 400, 'Invalid request URL.');
     }
+    const pathname = parsedUrl.pathname;
     const isRead = req.method === 'GET' || req.method === 'HEAD';
+
+    // These two narrowly scoped routes are intentionally public: only a
+    // user-published random link can reveal its sanitized TikTok snapshot.
+    const publicPage = /^\/p\/([A-Za-z0-9_-]{24})$/.exec(pathname);
+    const publicApi = /^\/api\/public-profile\/([A-Za-z0-9_-]{24})$/.exec(pathname);
+    if (publicPage || publicApi) {
+      if (!tiktok.ready) return rejectRequest(req, res, 404, 'Not found.');
+      if (publicPage) {
+        if (!isRead) return methodNotAllowed(req, res, ['GET', 'HEAD']);
+        req.resume();
+        try {
+          return send(res, 200, await readFile(publicProfileFile), 'text/html; charset=utf-8', {
+            'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'X-Robots-Tag': 'noindex, nofollow',
+            'Content-Security-Policy': "frame-ancestors 'none'; default-src 'self'; img-src https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'",
+          });
+        } catch (_) { return sendJson(res, 500, { error: 'Unable to load this profile.' }); }
+      }
+      if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET']);
+      req.resume();
+      try { return sendJson(res, 200, await tiktok.publicProfile(publicApi[1]), { 'Referrer-Policy': 'no-referrer' }); }
+      catch (error) { return sendJson(res, error.status || 503, { error: error.status ? error.message : 'Profile unavailable.' }, { 'Referrer-Policy': 'no-referrer' }); }
+    }
+
+    if (!authorize(req, res)) return;
 
     if (pathname === '/' || pathname === '/index.html') {
       if (!isRead) return methodNotAllowed(req, res, ['GET', 'HEAD']);
@@ -482,12 +527,66 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
         coachReady: config.ready,
         researchReady: config.researchReady,
         arenaReady: config.arenaReady,
+        tiktokReady: tiktok.ready,
         model: config.model,
         maxVideoBytes: MAX_VIDEO_BYTES,
         message: config.ready
           ? 'A model is configured, but has not been connection-tested. Each clip requires confirmation.'
           : 'Video AI is off or missing a key or access protection. No clip is sent automatically.',
       });
+    }
+
+    if (pathname.startsWith('/api/tiktok/')) {
+      // OAuth callbacks are browser navigations; state and a secure HttpOnly
+      // session cookie are checked before the code is ever exchanged.
+      if (pathname === '/api/tiktok/callback') {
+        if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET']);
+        req.resume();
+        let outcome = 'error';
+        if (!parsedUrl.searchParams.has('error')) {
+          try {
+            await tiktok.finish(req.headers.cookie, parsedUrl.searchParams.get('state'), parsedUrl.searchParams.get('code'));
+            outcome = 'connected';
+          } catch (_) { /* Avoid putting provider errors, codes or tokens in URLs or logs. */ }
+        } else outcome = 'denied';
+        res.writeHead(303, { Location: '/?tiktok=' + outcome, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' });
+        return res.end();
+      }
+      if (pathname === '/api/tiktok/profile') {
+        if (!isRead) return methodNotAllowed(req, res, ['GET', 'HEAD']);
+        req.resume();
+        try { return sendJson(res, 200, await tiktok.mine(req.headers.cookie)); }
+        catch (error) { return sendJson(res, error.status || 503, { error: error.status ? error.message : 'Profile storage is unavailable.' }); }
+      }
+      if (!['/api/tiktok/connect', '/api/tiktok/refresh', '/api/tiktok/share', '/api/tiktok/disconnect'].includes(pathname)) return rejectRequest(req, res, 404, 'Not found.');
+      if (req.method !== 'POST') return methodNotAllowed(req, res, ['POST']);
+      if (!originMatchesRequest(req) || req.headers['x-cutline-tiktok'] !== 'yes') return rejectRequest(req, res, 403, 'This request must come from the Cutline page.');
+      try {
+        if (pathname === '/api/tiktok/connect') {
+          req.resume();
+          const result = tiktok.begin(req.headers.cookie);
+          return sendJson(res, 200, { url: result.url }, { 'Set-Cookie': result.cookie, 'Referrer-Policy': 'no-referrer' });
+        }
+        if (pathname === '/api/tiktok/refresh') {
+          req.resume();
+          return sendJson(res, 200, await tiktok.mine(req.headers.cookie, true));
+        }
+        if (pathname === '/api/tiktok/disconnect') {
+          req.resume();
+          const result = await tiktok.disconnect(req.headers.cookie);
+          return sendJson(res, 200, result, { 'Set-Cookie': tiktok.clearSessionCookie() });
+        }
+        const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+        if (contentType !== 'application/json') return rejectRequest(req, res, 415, 'Sharing settings must use JSON.');
+        if (Number(req.headers['content-length'] || 0) > 1024) return rejectRequest(req, res, 413, 'Sharing settings are too large.', { Connection: 'close' });
+        const bytes = await readLimitedBody(req, 1024, { tooLarge: 'Sharing settings are too large.', empty: 'Choose whether to share your profile.' });
+        let body;
+        try { body = JSON.parse(bytes.toString('utf8')); } catch (_) { return sendJson(res, 400, { error: 'Sharing settings were not valid JSON.' }); }
+        if (!body || typeof body.share !== 'boolean') return sendJson(res, 400, { error: 'Choose whether to share your profile.' });
+        return sendJson(res, 200, await tiktok.share(req.headers.cookie, body.share));
+      } catch (error) {
+        return sendJson(res, error.status || error.statusCode || 503, { error: error.status || error.statusCode ? error.message : 'TikTok profile is unavailable.' });
+      }
     }
 
     if (pathname === '/api/video-review') {
@@ -529,14 +628,15 @@ if (require.main === module) {
       const address = server.address();
       const config = configuration(process.env);
       const access = config.passwordValid ? 'protected' : (config.passwordProvided ? 'blocked (invalid password)' : 'unprotected');
-      console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}; Coach ${config.ready ? 'configured' : 'off'}.`);
+      const coach = config.ready ? (config.arenaReady ? 'Gemini and Arena configured' : 'Gemini configured') : (config.arenaReady ? 'Arena text configured' : 'off');
+      console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}; Coach ${coach}.`);
       if (config.passwordProvided && !config.passwordValid) {
         console.warn('Access password is invalid; all requests are blocked. Use a unique password of 16–256 characters.');
       }
       if (config.aiRequested && !config.passwordValid) {
         console.warn('Video AI remains off until a valid access password is configured.');
       }
-      if (config.ready) {
+      if (config.ready || config.arenaReady) {
         console.warn('Shared-password protection is for personal testing only; per-user quotas are not implemented. Use HTTPS.');
       }
     });

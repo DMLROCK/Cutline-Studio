@@ -6,7 +6,7 @@ const http = require('node:http');
 const { createServer } = require('../server');
 const {
   MAX_COACH_BODY_BYTES, canonicalYouTubeUrl, normalizeCoachRequest, coachRequestPayload,
-  parseCoachResponse, parseResearchResponse,
+  parseCoachResponse, parseResearchResponse, cleanArenaRecipe, parseArenaResponse,
 } = require('../coach');
 
 const PASSWORD = 'test-only-coach-password-42';
@@ -135,6 +135,17 @@ test('grounded citations use UTF-8 byte offsets per part and unsafe sources are 
   assert.equal(parseResearchResponse(data), null); // Never silently drop sources.
 });
 
+test('Arena recipes are optional, bounded, allowlisted, and plain text still works', () => {
+  const recipe = cleanArenaRecipe({ headline:'X'.repeat(90), supportingLine:'Keep it readable', titlePosition:'top', titleAnimation:'slide', colorPreset:'punch', zoomStart:125, zoomEnd:180, animateZoom:true, panX:-40, panY:101, vignette:25, fadeIn:.5, fadeOut:4, speed:1.25, unsupported:'execute', __proto__:{ injected:true } });
+  assert.equal(recipe.headline.length, 80);
+  assert.deepEqual(recipe, { headline:'X'.repeat(80), supportingLine:'Keep it readable', titlePosition:'top', titleAnimation:'slide', colorPreset:'punch', zoomStart:125, zoomEnd:180, panX:-40, vignette:25, animateZoom:true, fadeIn:.5, speed:1.25 });
+  assert.equal(cleanArenaRecipe({ colorPreset:'javascript:bad', zoomStart:Infinity, speed:'2' }), null);
+  const result = parseArenaResponse({ choices:[{ message:{ content:'```json\n' + JSON.stringify({ answer:'Original creative idea', recipe:{ titleAnimation:'pop', zoomStart:140 } }) + '\n```' } }] });
+  assert.equal(result.text, 'Original creative idea');
+  assert.deepEqual(result.recipe, { titleAnimation:'pop', zoomStart:140 });
+  assert.deepEqual(parseArenaResponse({ choices:[{ message:{ content:'Plain text answer' } }] }), { text:'Plain text answer', recipe:null });
+});
+
 test('Coach fails closed without access protection and requires auth, origin and consent', async t => {
   let calls = 0;
   const mock = async () => { calls++; return google(); };
@@ -211,6 +222,44 @@ test('opt-in Google Search and Arena calls have separate inputs and return sourc
   assert.doesNotMatch(calls[2].options.body, /file_data|inline_data/);
   assert.match(result.arena, /Arena creative ideas/);
   assert.doesNotMatch(JSON.stringify(result), /test-only-arena-key|test-only-google-key/);
+});
+
+test('Arena-only text Coach works without Gemini and never fabricates video-clip actions', async t => {
+  const calls = [];
+  const env = { CUTLINE_ACCESS_PASSWORD:PASSWORD, CUTLINE_ARENA_ENABLED:'true', ARENA_API_KEY:ARENA_KEY, ARENA_MODEL:'approved/model' };
+  const base = await start(t, { env, fetchImpl:async (url, options) => { calls.push({ url, options }); return arena(JSON.stringify({ answer:'Here is a text-only plan.', recipe:{ headline:'A big moment', zoomStart:120 } })); } });
+  const health = await (await fetch(base + '/api/health', { headers:{ Authorization:AUTH } })).json();
+  assert.equal(health.coachReady, false); assert.equal(health.arenaReady, true); assert.equal(health.videoReviewReady, false);
+  assert.equal((await request(base, { prompt:'Research this', engine:'arena', research:true })).status, 400);
+  assert.equal((await request(base, { prompt:'Analyze this', engine:'gemini' })).status, 503);
+  assert.equal(calls.length, 0);
+  const response = await request(base, { prompt:`Analyze ${YOUTUBE}`, engine:'arena', history:[{ role:'user', text:'Basketball context' }] });
+  const result = await response.json();
+  assert.equal(response.status, 200); assert.equal(result.provider, 'arena');
+  assert.equal(result.answer, 'Here is a text-only plan.'); assert.deepEqual(result.clips, []); assert.equal(result.youtubeUrl, null);
+  assert.deepEqual(result.arenaRecipe, { headline:'A big moment', zoomStart:120 });
+  assert.equal(calls.length, 1); assert.match(calls[0].url, /arena\.ai/);
+  assert.match(calls[0].options.body, /Basketball context/);
+  assert.match(calls[0].options.body, /uninspected text/);
+  assert.doesNotMatch(calls[0].options.body, /file_data|inline_data/);
+  const open = await start(t, { env:{ ...env, CUTLINE_ACCESS_PASSWORD:undefined }, fetchImpl:async()=>{ throw new Error('must not call'); } });
+  assert.equal((await request(open, { prompt:'Ideas', engine:'arena' })).status, 503);
+});
+
+test('consented Arena output can include a safe edit recipe without receiving video bytes', async t => {
+  const calls = [];
+  const base = await start(t, {
+    env:{ ...ENV, CUTLINE_ARENA_ENABLED:'true', ARENA_API_KEY:ARENA_KEY, ARENA_MODEL:'approved/model' },
+    fetchImpl:async (url, options) => {
+      calls.push({ url, options });
+      return url.includes('arena.ai') ? arena(JSON.stringify({ answer:'Build a quick hook.', recipe:{ headline:'Big moment', zoomStart:120, zoomEnd:150, animateZoom:true, titleAnimation:'pop', vignette:20, speed:100, arbitraryAction:'bad' } })) : google();
+    },
+  });
+  const result = await (await request(base, { prompt:`Edit ${YOUTUBE}`, arena:true })).json();
+  assert.equal(result.arena, 'Build a quick hook.');
+  assert.deepEqual(result.arenaRecipe, { headline:'Big moment', titleAnimation:'pop', zoomStart:120, zoomEnd:150, vignette:20, animateZoom:true });
+  assert.doesNotMatch(calls[1].options.body, /file_data|inline_data/);
+  assert.match(calls[1].options.body, /not the video/i);
 });
 
 test('provider failures are meaningful and optional failures preserve the base answer', async t => {

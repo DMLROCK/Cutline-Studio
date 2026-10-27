@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Creator profile · Cutline Studio</title>
+  <style>
+    :root { color-scheme:dark; font-family:system-ui,-apple-system,sans-serif; background:#0d1210; color:#f2f6f0; }
+    * { box-sizing:border-box; } body { margin:0; padding:22px 16px 60px; }
+    main { max-width:720px; margin:0 auto; } a { color:#c8f276; }
+    .brand { font-size:12px; font-weight:900; letter-spacing:.12em; color:#c8f276; text-transform:uppercase; margin:8px 0 34px; }
+    .card { background:#171f1b; border:1px solid #2d3a31; border-radius:22px; padding:clamp(20px,5vw,40px); }
+    .identity { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+    .avatar { width:76px; height:76px; border-radius:50%; background:#31432e; object-fit:cover; }
+    .mark { width:76px; height:76px; display:grid; place-items:center; border-radius:50%; background:#31432e; color:#c8f276; font-size:30px; font-weight:900; }
+    h1 { font-size:clamp(25px,6vw,38px); margin:0 0 4px; overflow-wrap:anywhere; }
+    .handle,.note { color:#a5b4a8; line-height:1.6; font-size:14px; overflow-wrap:anywhere; }
+    .bio { line-height:1.6; color:#d8e1d8; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:28px 0; }
+    .stat { background:#202c24; padding:15px 12px; border-radius:13px; min-width:0; }
+    .stat b { display:block; font-size:clamp(17px,3vw,23px); overflow-wrap:anywhere; }
+    .stat span { color:#a5b4a8; font-size:11px; } button { border:1px solid #3e5141; border-radius:10px; padding:10px 14px; background:#253229; color:#e9f1e8; cursor:pointer; font:inherit; font-size:13px; }
+    .bottom { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    @media (max-width:500px) { .stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">✳ Cutline Studio / Creator profile</div>
+  <section class="card" aria-live="polite">
+    <p class="note" id="loading">Loading shared profile…</p>
+    <div id="profile" hidden>
+      <div class="identity"><div class="mark" id="avatar-fallback">✳</div><img id="avatar" class="avatar" alt="" hidden><div><h1 id="name">Creator</h1><div class="handle" id="handle"></div></div></div>
+      <p class="bio" id="bio" hidden></p>
+      <div class="stats" aria-label="TikTok account statistics">
+        <div class="stat"><b id="followers">—</b><span>Followers</span></div>
+        <div class="stat"><b id="likes">—</b><span>Total likes</span></div>
+        <div class="stat"><b id="following">—</b><span>Following</span></div>
+        <div class="stat"><b id="videos">—</b><span>Public videos</span></div>
+      </div>
+      <p class="note" id="timestamp"></p>
+      <div class="bottom"><a id="tiktok-link" target="_blank" rel="noopener noreferrer" hidden>View on TikTok ↗</a><button id="refresh" type="button">Refresh stats</button></div>
+      <p class="note">Shared by the creator. Counts are TikTok snapshots, not guaranteed live. LIVE member/subscriber counts are not provided here.</p>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const id = location.pathname.split('/').pop();
+  const el = id => document.getElementById(id);
+  let busy = false;
+  async function load() {
+    if (busy) return; busy = true; el('refresh').disabled = true;
+    try {
+      const response = await fetch('/api/public-profile/' + encodeURIComponent(id), { cache:'no-store', credentials:'omit', referrerPolicy:'no-referrer' });
+      if (!response.ok) throw new Error(response.status === 404 ? 'This profile is not available or the creator stopped sharing it.' : 'This profile is temporarily unavailable.');
+      const data = await response.json(); const p = data.profile;
+      el('loading').hidden = true; el('profile').hidden = false;
+      el('name').textContent = p?.displayName || 'TikTok creator';
+      el('handle').textContent = p?.username ? '@' + p.username + (p.verified ? ' · Verified' : '') : '';
+      el('bio').textContent = p?.bio || ''; el('bio').hidden = !p?.bio;
+      el('avatar').hidden = !p?.avatarUrl; el('avatar-fallback').hidden = !!p?.avatarUrl;
+      if (p?.avatarUrl) el('avatar').src = p.avatarUrl; else el('avatar').removeAttribute('src');
+      for (const key of ['followers','likes','following','videos']) el(key).textContent = Number.isSafeInteger(p?.[key]) ? p[key].toLocaleString() : '—';
+      const updated = p?.updatedAt && Number.isFinite(p.updatedAt) ? new Date(p.updatedAt).toLocaleString() : '';
+      el('timestamp').textContent = data.refreshFailed ? 'TikTok could not confirm this profile right now, so its cached details are hidden. Try again later.' : (updated ? 'Last fetched from TikTok: ' + updated + '. Refreshes are limited to once per minute.' : 'No TikTok snapshot is available yet.');
+      if (!data.statsPermission) el('timestamp').textContent += ' Statistics permission was not granted.';
+      el('tiktok-link').hidden = !p?.profileUrl;
+      if (p?.profileUrl) el('tiktok-link').href = p.profileUrl; else el('tiktok-link').removeAttribute('href');
+    } catch (error) { el('loading').hidden = false; el('loading').textContent = error.message || 'Profile unavailable.'; el('profile').hidden = true; }
+    finally { busy = false; el('refresh').disabled = false; }
+  }
+  el('refresh').addEventListener('click', load); load();
+  setInterval(() => { if (!document.hidden) load(); }, 60_000);
+})();
+</script>
+</body>
+</html>
