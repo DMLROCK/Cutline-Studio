@@ -123,6 +123,47 @@ test('the start command fails clearly for an invalid PORT', () => {
   assert.match(child.stderr, /PORT must be an integer/);
 });
 
+test('safe local startup refuses missing and invalid passwords before listening', () => {
+  const invalidPasswords = [undefined, '', 'too-short', ' '.repeat(16), 'invalid-control\npassword', 'x'.repeat(257)];
+  for (const password of invalidPasswords) {
+    const child = spawnSync(process.execPath, [path.join(__dirname, '..', 'server.js'), '--safe-local'], {
+      env: { ...process.env, HOST: '0.0.0.0', PORT: '0', CUTLINE_ACCESS_PASSWORD: password },
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.equal(child.status, 1);
+    assert.match(child.stderr, /Safe local mode requires a valid CUTLINE_ACCESS_PASSWORD/);
+    assert.doesNotMatch(child.stdout, /listening/i);
+  }
+});
+
+test('safe local startup forces loopback and challenges unauthenticated requests', { timeout: 10000 }, async t => {
+  const password = 'example-password-for-safe-local-test';
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js'), '--safe-local'], {
+    env: { ...process.env, HOST: '0.0.0.0', PORT: '0', CUTLINE_ACCESS_PASSWORD: password },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); });
+  const output = await Promise.race([
+    once(child.stdout, 'data').then(([data]) => data.toString()),
+    once(child, 'error').then(([error]) => { throw error; }),
+    once(child, 'exit').then(([code]) => { throw new Error(`Server exited before listening (${code}).`); }),
+  ]);
+  const match = output.match(/127\.0\.0\.1:(\d+); access protected/);
+  assert.ok(match, `Unexpected server output: ${output}`);
+  assert.doesNotMatch(output, new RegExp(password));
+  const url = `http://127.0.0.1:${match[1]}/api/health`;
+  const unauthenticated = await fetch(url);
+  assert.equal(unauthenticated.status, 401);
+  assert.match(unauthenticated.headers.get('www-authenticate'), /^Basic /);
+  const authorization = 'Basic ' + Buffer.from(`cutline:${password}`).toString('base64');
+  const authenticated = await fetch(url, { headers: { authorization } });
+  assert.equal(authenticated.status, 200);
+  const exited = once(child, 'exit');
+  child.kill();
+  await exited;
+});
+
 test('starting with a key but no password disables AI without logging the key', { timeout: 10000 }, async t => {
   const fakeKey = 'fake-key-for-logging-test';
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {

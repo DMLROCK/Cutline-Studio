@@ -627,10 +627,18 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
 }
 
 if (require.main === module) {
+  // A service manager can restart this mode without ever falling back to the
+  // open local prototype if its secret is lost or misconfigured. Loopback does
+  // not itself make a reverse proxy private; the password is still required.
+  const safeLocal = process.argv.slice(2).includes('--safe-local');
   const port = Number(process.env.PORT || '4173');
-  const host = process.env.HOST || '0.0.0.0';
+  const host = safeLocal ? '127.0.0.1' : (process.env.HOST || '0.0.0.0');
+  const config = configuration(process.env);
 
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+  if (safeLocal && !config.passwordValid) {
+    console.error('Safe local mode requires a valid CUTLINE_ACCESS_PASSWORD of 16–256 characters; server not started.');
+    process.exitCode = 1;
+  } else if (!Number.isInteger(port) || port < 0 || port > 65535) {
     console.error('PORT must be an integer between 0 and 65535.');
     process.exitCode = 1;
   } else {
@@ -641,7 +649,6 @@ if (require.main === module) {
     });
     server.listen(port, host, () => {
       const address = server.address();
-      const config = configuration(process.env);
       const access = config.passwordValid ? 'protected' : (config.passwordProvided ? 'blocked (invalid password)' : 'unprotected');
       const coach = config.ready ? (config.arenaReady ? 'Gemini and Arena configured' : 'Gemini configured') : (config.arenaReady ? 'Arena text configured' : 'off');
       console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}; Coach ${coach}.`);

@@ -33,6 +33,8 @@ Optional real-browser smoke tests are in `scripts/browser-smoke.cjs` and `script
 
 Without an access password the local app is open to anyone who can reach it, and all AI routes remain **off**. Do not expose an unprotected personal preview to the internet.
 
+For a Windows computer that should start the app automatically, see [Windows hosting and uptime](WINDOWS-HOSTING.md). Its `node server.js --safe-local` mode requires a valid access password before starting and binds to loopback even if `HOST` is set differently. A public proxy can still expose the app; check the password challenge before publishing it. The Windows/Servy/Tailscale setup has not been tested end to end.
+
 ### Browser-only fallback preview
 
 For a quick look when the live sandbox is unavailable, the public branch can be opened through the third-party [HTML Preview service](https://htmlpreview.github.io/?https://github.com/DMLROCK/Cutline-Studio/blob/arena/ae97be88-cutline-studio/index.html). This is not the hosted Node app: AI, research, TikTok and server APIs are unavailable. It can load the browser editor, but codec/export support depends on the device and service. Because the page is delivered through a third party that controls its own code, do not enter secrets or use confidential media there; use a non-sensitive test clip. For actual AI, deploy the private Node app below.
