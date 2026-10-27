@@ -8,6 +8,10 @@ const MAX_HISTORY_CHARS = 1200;
 const MAX_COACH_BODY_BYTES = 32 * 1024;
 const MAX_SUGGESTION_SECONDS = 60;
 const MAX_VIDEO_SECONDS = 12 * 60 * 60;
+// Higher frame sampling is opt-in and limited to a short interval so it cannot
+// accidentally multiply the token use of a whole game or long broadcast.
+const MAX_FOCUS_SECONDS = 90;
+const FOCUS_FPS = 3;
 const MODES = new Set(['brainstorm', 'titles', 'edit', 'trends']);
 
 function isYouTubeHost(host) {
@@ -70,9 +74,22 @@ function normalizeCoachRequest(input) {
     })
     : [];
   const engine = input.engine === 'arena' ? 'arena' : 'gemini';
+  const youtubeUrl = engine === 'gemini' ? (links[0] || null) : null;
+  let videoFocus = null;
+  if (input.videoFocus !== undefined && input.videoFocus !== null) {
+    const focus = input.videoFocus;
+    if (engine !== 'gemini' || !youtubeUrl) throw new Error('Fast-action focus requires a public YouTube video in Gemini mode.');
+    if (!focus || typeof focus !== 'object' || Array.isArray(focus)
+      || !Number.isSafeInteger(focus.startSeconds) || !Number.isSafeInteger(focus.endSeconds)
+      || focus.startSeconds < 0 || focus.endSeconds > MAX_VIDEO_SECONDS
+      || focus.endSeconds <= focus.startSeconds || focus.endSeconds - focus.startSeconds > MAX_FOCUS_SECONDS) {
+      throw new Error(`Choose a valid focus range of up to ${MAX_FOCUS_SECONDS} seconds.`);
+    }
+    videoFocus = { startSeconds: focus.startSeconds, endSeconds: focus.endSeconds };
+  }
   // Arena is text-only here: a link may appear in the message, but no video is
   // attached and it must never produce source-timestamp editor actions.
-  return { prompt, mode, history, engine, youtubeUrl: engine === 'gemini' ? (links[0] || null) : null, research: input.research === true, arena: engine === 'gemini' && input.arena === true };
+  return { prompt, mode, history, engine, youtubeUrl, videoFocus, research: input.research === true, arena: engine === 'gemini' && input.arena === true };
 }
 
 const SYSTEM_INSTRUCTION = [
@@ -86,7 +103,8 @@ const SYSTEM_INSTRUCTION = [
   'Do not suggest copying another creator frame-for-frame. Remind the creator to check rights for footage and music, and to review the AI timestamps.',
   'The editor uses a separately supplied authorized copy of the same source video; you cannot download or edit the YouTube video yourself. Its working tools include ordered source cuts, splitting, per-cut speed, 9:16 crop, zoom, color, timed text, audio and a short fade through black. Do not promise tools or automatic editing that are not available.',
   'For multiple useful moments, return clips in the suggested story order, even if that differs from source order. Aim for a combined source duration of at most 60 seconds; the creator can reorder or shorten them. Explain why each moment matters and mark uncertain timestamps.',
-  'Return only the JSON object described by the response schema. In answer, use readable plain text with short headings. Return up to 4 suggested single clips with startSeconds and endSeconds relative to the source video, each at most 60 seconds. Avoid zero-length clips. If uncertain, return an empty clips array.',
+  'When a useful edit is requested, optionally suggest an editRecipe using only the fields in the response schema. These are editable starting settings, never commands. Keep overlays readable and do not invent facts. The creator must approve the settings before anything is changed.',
+  'Return only the JSON object described by the response schema. In answer, use readable plain text with short headings. Return up to 4 suggested single clips with startSeconds and endSeconds relative to the original full source video, each at most 60 seconds. If the creator requests a focused interval, use absolute times in the original source, not offsets from the start of that interval; return no clips if unsure. Avoid zero-length clips. If uncertain, return an empty clips array.',
 ].join('\n');
 
 const COACH_SCHEMA = {
@@ -107,6 +125,23 @@ const COACH_SCHEMA = {
         required: ['label', 'startSeconds', 'endSeconds', 'reason', 'overlay'],
       },
     },
+    // Optional, validated again on both the server and client. Keep this schema
+    // compact: unsupported values or a missing recipe must not block the answer.
+    editRecipe: {
+      type: 'OBJECT',
+      description: 'Optional editable settings for an original short-form edit.',
+      properties: {
+        headline: { type: 'STRING' },
+        supportingLine: { type: 'STRING' },
+        titlePosition: { type: 'STRING', enum: ['top', 'center', 'bottom'] },
+        titleAnimation: { type: 'STRING', enum: ['none', 'fade', 'pop', 'slide'] },
+        colorPreset: { type: 'STRING', enum: ['clean', 'punch', 'warm', 'mono'] },
+        zoomStart: { type: 'NUMBER' },
+        zoomEnd: { type: 'NUMBER' },
+        animateZoom: { type: 'BOOLEAN' },
+        speed: { type: 'NUMBER' },
+      },
+    },
   },
   required: ['answer', 'clips'],
 };
@@ -124,15 +159,31 @@ function coachRequestPayload(request) {
     `Creator's selected task: ${request.mode}. ${task}`,
     `Creator's message: ${request.prompt}`,
     request.youtubeUrl ? 'The attached public YouTube video is the only video source for this request.' : 'No video is attached. Do not claim to have watched or retrieved any links in the message.',
+    request.videoFocus ? `Focus is the original source interval from ${request.videoFocus.startSeconds} to ${request.videoFocus.endSeconds} seconds. Give source timestamps in original-video seconds, not seconds relative to this interval. Only suggest clips within this interval, and return no clips if the source timing is unclear.` : '',
   ].filter(Boolean).join('\n\n');
   const parts = [];
-  if (request.youtubeUrl) parts.push({ file_data: { file_uri: request.youtubeUrl } });
+  if (request.youtubeUrl) {
+    const video = { file_data: { file_uri: request.youtubeUrl } };
+    if (request.videoFocus) video.video_metadata = {
+      start_offset: `${request.videoFocus.startSeconds}s`, end_offset: `${request.videoFocus.endSeconds}s`, fps: FOCUS_FPS,
+    };
+    parts.push(video);
+  }
   parts.push({ text: context });
   return {
     systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
     contents: [{ role: 'user', parts }],
-    generationConfig: { temperature: 0.25, maxOutputTokens: 4096, responseMimeType: 'application/json', responseSchema: COACH_SCHEMA },
+    // Leave temperature at the provider default; Google recommends 1.0 for
+    // Gemini 3 reasoning instead of overriding it with a lower value.
+    // Thinking tokens also count against this cap; a tiny limit can leave no
+    // room for the actual answer. This remains a cap, not a guaranteed usage.
+    generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json', responseSchema: COACH_SCHEMA },
   };
+}
+
+function geminiFinishReason(data) {
+  const candidate = data?.candidates?.[0];
+  return typeof candidate?.finishReason === 'string' ? candidate.finishReason : (typeof candidate?.finish_reason === 'string' ? candidate.finish_reason : '');
 }
 
 function visibleGeminiText(data) {
@@ -141,13 +192,16 @@ function visibleGeminiText(data) {
   return parts.filter(part => part && part.thought !== true && typeof part.text === 'string').map(part => part.text).join('\n').trim().slice(0, 24000);
 }
 
-function cleanClips(input, allowVideo) {
+function cleanClips(input, allowVideo, videoFocus = null) {
   if (!allowVideo || !Array.isArray(input)) return [];
   return input.slice(0, 8).flatMap(item => {
     if (!item || typeof item !== 'object') return [];
     const start = item.startSeconds;
     const end = item.endSeconds;
     if (typeof start !== 'number' || typeof end !== 'number' || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end - start < 0.1 || end > MAX_VIDEO_SECONDS || end - start > MAX_SUGGESTION_SECONDS) return [];
+    // Focused analysis must never create an editor action outside the range the
+    // user chose. This does not prove the model's timestamps are correct.
+    if (videoFocus && (start < videoFocus.startSeconds || end > videoFocus.endSeconds)) return [];
     return [{
       label: String(item.label || 'Suggested moment').slice(0, 90),
       startSeconds: Math.round(start * 10) / 10,
@@ -158,7 +212,11 @@ function cleanClips(input, allowVideo) {
   }).slice(0, 4);
 }
 
-function parseCoachResponse(data, hasVideo) {
+function parseCoachResponse(data, hasVideo, videoFocus = null) {
+  const finishReason = geminiFinishReason(data);
+  // An unfinished or blocked response can contain partial JSON or misleading
+  // text. Never turn it into an editor action or present it as a full answer.
+  if (finishReason && finishReason !== 'STOP') return null;
   const raw = visibleGeminiText(data);
   if (!raw) return null;
   let parsed;
@@ -169,7 +227,12 @@ function parseCoachResponse(data, hasVideo) {
     return { answer: raw.slice(0, 10000), clips: [] };
   }
   if (!parsed || typeof parsed.answer !== 'string' || !parsed.answer.trim()) return null;
-  return { answer: parsed.answer.trim().slice(0, 10000), clips: cleanClips(parsed.clips, hasVideo) };
+  const recipe = cleanEditRecipe(parsed.editRecipe);
+  return {
+    answer: parsed.answer.trim().slice(0, 10000),
+    clips: cleanClips(parsed.clips, hasVideo, videoFocus),
+    ...(recipe ? { editRecipe: recipe } : {}),
+  };
 }
 
 function researchRequestPayload(request, answer) {
@@ -182,7 +245,7 @@ function researchRequestPayload(request, answer) {
     ].join('\n') }] },
     contents: [{ role: 'user', parts: [{ text: `Creator request: ${request.prompt}\n\nUnverified video/idea context: ${answer.slice(0, 6000)}\n\nResearch recent, relevant sports context and platform guidance, then suggest titles and hashtags with clear caveats.` }] }],
     tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 2400 },
+    generationConfig: { maxOutputTokens: 8192 },
   };
 }
 
@@ -196,6 +259,8 @@ function safeHttpsUrl(value) {
 }
 
 function parseResearchResponse(data) {
+  const finishReason = geminiFinishReason(data);
+  if (finishReason && finishReason !== 'STOP') return null;
   const parts = data?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return null;
   let text = '';
@@ -259,7 +324,7 @@ function arenaRequestPayload(request, answer, model) {
   };
 }
 
-function cleanArenaRecipe(input) {
+function cleanEditRecipe(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const recipe = {};
   for (const [key, limit] of [['headline', 80], ['supportingLine', 100]]) {
@@ -284,7 +349,7 @@ function parseArenaResponse(data) {
   if (!text) return { text: '', recipe: null };
   try {
     const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
-    if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) return { text: parsed.answer.trim().slice(0, 8000), recipe: cleanArenaRecipe(parsed.recipe) };
+    if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) return { text: parsed.answer.trim().slice(0, 8000), recipe: cleanEditRecipe(parsed.recipe) };
   } catch (_) { /* Text-only models sometimes ignore the requested JSON format. */ }
   return { text: text.slice(0, 8000), recipe: null };
 }
@@ -295,9 +360,12 @@ module.exports = {
   normalizeCoachRequest,
   coachRequestPayload,
   parseCoachResponse,
+  geminiFinishReason,
   researchRequestPayload,
   parseResearchResponse,
   arenaRequestPayload,
-  cleanArenaRecipe,
+  cleanEditRecipe,
+  // Preserve the earlier helper name for callers and saved test fixtures.
+  cleanArenaRecipe: cleanEditRecipe,
   parseArenaResponse,
 };

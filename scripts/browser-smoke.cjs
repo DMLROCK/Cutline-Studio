@@ -58,7 +58,8 @@ async function main() {
           if (options.signal.aborted) stop(); else options.signal.addEventListener('abort',stop,{once:true});
         });
       }
-      return new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({answer:'Mock summary; verify all details.',clips})}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
+      const editRecipe={headline:'AI HOOK',colorPreset:'warm',zoomStart:120,zoomEnd:140,animateZoom:true,speed:1.25,unsupported:'ignore'};
+      return new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({answer:'Mock summary; verify all details.',clips,editRecipe})}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
     },
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -66,13 +67,19 @@ async function main() {
   const browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   try {
     const page=await browser.newPage(), errors=[], dialogs=[];
+    let rejectNextDialog=false;
     page.on('pageerror',error=>errors.push(error.message));
-    page.on('dialog',dialog=>{ dialogs.push(dialog.message()); dialog.accept(); });
+    page.on('dialog',dialog=>{ dialogs.push(dialog.message()); if (rejectNextDialog) { rejectNextDialog=false; dialog.dismiss(); } else dialog.accept(); });
     await page.setViewport({width:1360,height:900}); await page.authenticate({username:'cutline',password});
     await page.goto(base,{waitUntil:'networkidle0'});
     const set=async(id,value,type='input') => page.evaluate(({id,value,type})=>{const el=document.getElementById(id); if(el.type==='checkbox')el.checked=value;else el.value=String(value); el.dispatchEvent(new Event(type,{bubbles:true}));},{id,value,type});
     await page.click('.sidebar [data-view="coach"]');
     await page.waitForFunction(()=>!document.querySelector('#coach-test').disabled);
+    await set('chat-input',youtube);
+    await page.evaluate(()=>[...document.querySelectorAll('.welcome-message button')].find(el=>el.textContent==='Find highlight moments').click());
+    assert.match(await page.$eval('#chat-input',el=>el.value),/Find up to four.*[\s\S]*youtube\.com/);
+    assert.equal(requests.length,0,'prompt shortcut contacted provider');
+    await set('chat-input','');
     await set('coach-video-url',youtube);
     await page.click('#coach-test');
     await page.waitForFunction(()=>document.querySelector('#coach-test-status').textContent.includes('replied'));
@@ -93,6 +100,45 @@ async function main() {
     await page.waitForFunction(()=>document.querySelectorAll('.cut-row').length===3);
     assert.match(await page.$eval('#editor-suggestion-status',el=>el.textContent),/approximate AI moments/i);
     console.log('PASS: consented video follow-up and explicit AI-to-timeline handoff');
+
+    // The proposed look is only applied after the user reviews it; a speed
+    // suggestion updates just the selected cut and remains undoable.
+    await page.click('.sidebar [data-view="coach"]');
+    await page.waitForFunction(()=>[...document.querySelectorAll('.message-actions button')].some(el=>el.textContent.includes('Gemini edit recipe')));
+    const beforeHeadline=await page.$eval('#overlay-input',el=>el.value);
+    rejectNextDialog=true;
+    await page.evaluate(()=>[...document.querySelectorAll('.message-actions button')].find(el=>el.textContent.includes('Gemini edit recipe')).click());
+    assert.equal(await page.$eval('#overlay-input',el=>el.value),beforeHeadline);
+    assert.match(await page.$eval('.cut-row:first-child .cut-select',el=>el.textContent),/· 1×/);
+    await page.evaluate(()=>[...document.querySelectorAll('.message-actions button')].find(el=>el.textContent.includes('Gemini edit recipe')).click());
+    assert.ok(dialogs.some(text=>text.includes('Gemini suggested') && text.includes('only the selected timeline cut')));
+    assert.equal(await page.$eval('#overlay-input',el=>el.value),'AI HOOK');
+    assert.match(await page.$eval('.cut-row:first-child .cut-select',el=>el.textContent),/1\.25×/);
+    await page.click('#undo-cuts');
+    assert.match(await page.$eval('.cut-row:first-child .cut-select',el=>el.textContent),/· 1×/);
+    await page.click('.preset-button[data-preset="clean"]'); await set('overlay-input','');
+    await set('zoom-start',100); await set('zoom-end',100); await set('zoom-animate',false,'change');
+    console.log('PASS: Gemini edit recipe review, application and selected-cut speed undo');
+
+    // Refine a suggestion only after explicit 3-FPS/range consent.
+    await page.click('.sidebar [data-view="coach"]');
+    await page.evaluate(()=>[...document.querySelectorAll('.clip-suggestions button')].find(el=>el.textContent==='Take a closer look').click());
+    assert.equal(await page.$eval('#coach-focus',el=>el.checked),true);
+    assert.equal(await page.$eval('#coach-focus-start',el=>el.value),'0:00');
+    assert.equal(await page.$eval('#coach-focus-end',el=>el.value),'0:05');
+    await set('coach-focus-end','2:00'); await page.click('#coach-send');
+    assert.equal(requests.length,2,'invalid range reached provider');
+    assert.equal(await page.$eval('#coach-consent-modal',el=>el.hidden),true);
+    await set('coach-focus-end','0:05'); await page.$eval('#coach-send',el=>el.click());
+    await page.waitForFunction(()=>!document.querySelector('#coach-consent-modal').hidden);
+    assert.match(await page.$eval('#coach-consent-extras',el=>el.textContent),/0:00–0:05.*3 sampled frames/);
+    assert.equal(requests.length,2,'focused video sent without consent');
+    await page.click('#coach-consent'); await page.click('#confirm-coach');
+    await page.waitForFunction(()=>document.querySelector('#chat-messages').textContent.includes('focused 3 FPS'));
+    assert.deepEqual(requests[2].contents[0].parts[0].video_metadata,{start_offset:'0s',end_offset:'5s',fps:3});
+    await set('coach-focus',false,'change');
+    console.log('PASS: bounded focused-video refinement requires consent and forwards 3 FPS');
+    await page.click('.sidebar [data-view="editor"]');
 
     await page.$eval('.cut-row:nth-child(3) [aria-label="Move cut earlier 3"]',el=>el.click());
     await set('playback-speed',1.25,'change'); await page.click('#update-cut');
@@ -209,9 +255,15 @@ async function main() {
     await page.setViewport({width:320,height:844,isMobile:true,hasTouch:true});
     await page.evaluate(()=>document.querySelector('.mobile-nav [data-view="editor"]').click());
     const dimensions=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
-    assert.ok(dimensions.scroll<=dimensions.client+1,`mobile horizontal overflow: ${JSON.stringify(dimensions)}`);
+    assert.ok(dimensions.scroll<=dimensions.client+1,`mobile editor overflow: ${JSON.stringify(dimensions)}`);
+    await page.evaluate(()=>document.querySelector('.mobile-nav [data-view="coach"]').click());
+    await set('coach-focus',true,'change');
+    const coachDimensions=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth,
+      offenders:[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1 || (el.clientWidth>0 && el.scrollWidth>el.clientWidth+1)).slice(0,30).map(el=>({tag:el.tagName,id:el.id,cls:String(el.className),left:Math.round(el.getBoundingClientRect().left),right:Math.round(el.getBoundingClientRect().right),scroll:el.scrollWidth,client:el.clientWidth,overflow:getComputedStyle(el).overflowX,text:el.textContent.slice(0,80)}))}));
+    assert.ok(coachDimensions.scroll<=coachDimensions.client+1,`mobile Coach overflow: ${JSON.stringify(coachDimensions)}`);
+    assert.equal(await page.$eval('#coach-focus-fields',el=>el.hidden),false);
     assert.deepEqual(errors,[]);
-    console.log('PASS: narrow phone editor layout without browser errors');
+    console.log('PASS: narrow phone editor and focused-Coach layout without browser errors');
   } finally {
     await browser.close(); await new Promise(resolve=>server.close(resolve));
     if (process.env.KEEP_BROWSER_ARTIFACTS === '1') console.log(`Browser artifacts: ${temp}`);

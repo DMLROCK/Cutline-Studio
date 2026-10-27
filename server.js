@@ -8,7 +8,7 @@ const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { createTikTokService } = require('./tiktok');
 const {
-  MAX_COACH_BODY_BYTES, normalizeCoachRequest, coachRequestPayload, parseCoachResponse,
+  MAX_COACH_BODY_BYTES, normalizeCoachRequest, coachRequestPayload, parseCoachResponse, geminiFinishReason,
   researchRequestPayload, parseResearchResponse, arenaRequestPayload, parseArenaResponse,
 } = require('./coach');
 
@@ -283,26 +283,25 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
                 { text: instruction },
               ],
             }],
-            generationConfig: { temperature: 0.25, maxOutputTokens: 1600 },
+            // Use the Gemini 3 default temperature recommended by Google.
+            generationConfig: { maxOutputTokens: 8192 },
           }),
           signal: controller.signal,
         });
-        let providerData;
-        try {
-          providerData = await upstream.json();
-        } catch (error) {
-          if (error.name === 'AbortError') throw error;
-          providerData = {};
-        }
         if (!upstream.ok) {
+          if (upstream.body && typeof upstream.body.cancel === 'function') await upstream.body.cancel().catch(() => {});
           const status = upstream.status === 429 ? 429 : 502;
           const message = upstream.status === 429
             ? 'The AI provider is rate limiting this request. Wait and try again.'
             : 'The AI provider could not review this file. Check the model, video format, account and server setup.';
           return sendJson(res, status, { error: message });
         }
-        const parts = providerData?.candidates?.[0]?.content?.parts || [];
-        const text = parts.map(part => part.text || '').filter(Boolean).join('\n\n').trim();
+        const providerData = await readProviderJson(upstream);
+        const finishReason = geminiFinishReason(providerData);
+        if (finishReason === 'MAX_TOKENS') return sendJson(res, 502, { error: 'The AI review reached its output limit before finishing. Try a shorter clip or a narrower question.' });
+        if (finishReason && finishReason !== 'STOP') return sendJson(res, 502, { error: 'The AI provider could not return a complete review of this clip.' });
+        const parts = providerData?.candidates?.[0]?.content?.parts;
+        const text = Array.isArray(parts) ? parts.filter(part => part && part.thought !== true && typeof part.text === 'string').map(part => part.text).join('\n\n').trim().slice(0, 24000) : '';
         if (!text) return sendJson(res, 502, { error: 'The AI provider returned no readable review.' });
         return sendJson(res, 200, { text, model: config.model });
       } finally {
@@ -377,6 +376,10 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
   function providerFailure(error, feature) {
     if (error.name === 'AbortError') return `${feature} took too long or was canceled. Try again later.`;
     if (error.providerStatus === 429) return `${feature} hit a provider rate limit or quota. Wait or check the provider account.`;
+    if (error.providerStatus === 401 || error.providerStatus === 403) return `${feature} was not authorized. Check the server's provider key, account access and enabled model.`;
+    if (error.providerStatus === 404) return `${feature} could not find the configured provider model. Check the model name and account access.`;
+    if (error.providerStatus === 400 && feature === 'Gemini Coach') return 'Gemini rejected this request. Check that the video is public and the model supports it; if using fast-action focus, turn it off and try again.';
+    if (error.providerStatus >= 500) return `${feature} is temporarily unavailable at the provider. Try again later.`;
     return `${feature} could not be completed. Check the provider key, model, account access and server settings.`;
   }
 
@@ -438,8 +441,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
         const status = error.name === 'AbortError' ? 504 : (error.providerStatus === 429 ? 429 : 502);
         return sendJson(res, status, { error: providerFailure(error, 'Gemini Coach') });
       }
-      const result = parseCoachResponse(data, Boolean(request.youtubeUrl));
-      if (!result) return sendJson(res, 502, { error: 'Gemini returned no readable answer. The video may be unavailable, unsupported or blocked.' });
+      if (geminiFinishReason(data) === 'MAX_TOKENS') {
+        return sendJson(res, 502, { error: 'Gemini reached its output limit before finishing. Try a shorter question or a focused video range.' });
+      }
+      const result = parseCoachResponse(data, Boolean(request.youtubeUrl), request.videoFocus);
+      if (!result) return sendJson(res, 502, { error: 'Gemini returned no complete readable answer. The video may be unavailable, unsupported or blocked.' });
       const output = { ...result, youtubeUrl: request.youtubeUrl, model: config.model };
 
       if (request.research && !res.destroyed) {

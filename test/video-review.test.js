@@ -92,6 +92,28 @@ test('unsafe model names fall back to the default rather than entering the provi
   assert.equal(providerUrl, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');
 });
 
+test('video review hides unfinished output and internal thought parts', async t => {
+  const responses = [
+    { candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'private partial output'}]}}] },
+    { candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'private model thought'},{text:'Visible finished review'}]}}] },
+  ];
+  let time = 100_000;
+  const baseUrl = await start(t, { env:ENABLED_ENV, now:()=>{time+=31_000; return time;}, fetchImpl:async () => new Response(JSON.stringify(responses.shift()),{status:200}) });
+  const incomplete = await review(baseUrl);
+  assert.equal(incomplete.status,502); const first = await incomplete.text();
+  assert.match(first,/output limit/i); assert.doesNotMatch(first,/private partial output/);
+  const complete = await review(baseUrl);
+  assert.equal(complete.status,200); const second = await complete.text();
+  assert.match(second,/Visible finished review/); assert.doesNotMatch(second,/private model thought/);
+});
+
+test('video review bounds unexpectedly large provider responses', async t => {
+  const baseUrl = await start(t, { env:ENABLED_ENV, fetchImpl:async () => new Response(JSON.stringify({payload:'x'.repeat(1024*1024)}),{status:200}) });
+  const response = await review(baseUrl);
+  assert.equal(response.status,502);
+  assert.doesNotMatch(await response.text(),/x{100}|test-only-fake-key/);
+});
+
 test('rejects missing or mismatched origin, missing consent and unsupported types before contacting Gemini', async t => {
   let providerCalls = 0;
   const baseUrl = await start(t, { env: ENABLED_ENV, fetchImpl: async () => { providerCalls++; return successfulProviderResponse(); } });
@@ -120,6 +142,8 @@ test('a confirmed clip is sent to Gemini with its MIME type and bounded focus, t
   assert.equal(calls[0].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');
   assert.equal(calls[0].options.headers['x-goog-api-key'], TEST_KEY);
   const payload = JSON.parse(calls[0].options.body);
+  assert.equal(payload.generationConfig.temperature, undefined);
+  assert.equal(payload.generationConfig.maxOutputTokens, 8192);
   assert.equal(payload.contents[0].parts[0].inline_data.mime_type, 'video/mp4');
   assert.deepEqual(Buffer.from(payload.contents[0].parts[0].inline_data.data, 'base64'), video);
   assert.ok(payload.contents[0].parts[1].text.endsWith('Creator focus: ' + focus.slice(0, 500)));

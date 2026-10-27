@@ -167,8 +167,8 @@
     .recent-panel, .focus-panel { padding: 19px; }
     .list-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
     .tiny-link { border: 0; padding: 4px 0; background: none; color: var(--lime); font-size: 10px; font-weight: 750; cursor: pointer; }
-    .session-list { display: grid; gap: 7px; }
-    .session-row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 10px; border: 1px solid transparent; border-radius: 12px; text-align: left; color: var(--ink); background: var(--surface-2); cursor: pointer; }
+    .session-list { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 7px; }
+    .session-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 10px; border: 1px solid transparent; border-radius: 12px; text-align: left; color: var(--ink); background: var(--surface-2); cursor: pointer; }
     .session-row:hover { border-color: var(--line-strong); }
     .session-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: #bccbaf; background: var(--surface-3); }
     .session-info { flex: 1; min-width: 0; }
@@ -213,6 +213,14 @@
     .coach-options { display: flex; flex-wrap: wrap; gap: 7px 16px; padding: 10px 2px 2px; }
     .coach-options label { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 10px; line-height: 1.45; }
     .coach-options input { margin: 2px 0 0; accent-color: var(--lime); }
+    .coach-setup, .focus-options { margin-top: 11px; padding: 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+    .coach-setup strong { display: block; color: var(--ink); font-size: 11px; }
+    .coach-setup p, .coach-setup li, .focus-options p { color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .coach-setup p, .focus-options p { margin: 5px 0 0; }
+    .coach-setup ol { margin: 8px 0 0; padding-left: 17px; }
+    .coach-setup code { color: var(--ink); overflow-wrap: anywhere; }
+    .coach-setup summary { margin-top: 7px; color: var(--lime); font-size: 10px; cursor: pointer; }
+    .focus-options label.check-control { font-size: 10px; font-weight: 700; }
     .clip-suggestions { display: grid; gap: 8px; margin-top: 10px; }
     .clip-suggestion { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
     .clip-suggestion strong, .clip-suggestion small { display: block; }
@@ -733,6 +741,18 @@
                 <div class="coach-identity"><span class="coach-avatar"><svg class="icon"><use href="#i-spark"></use></svg></span><div><strong>Cutline Coach</strong><small>Video insights &amp; creative direction</small></div></div>
                 <span class="offline-badge" id="coach-ai-badge">AI CHECKING</span>
               </div>
+              <section class="coach-setup" id="coach-setup" style="margin:12px 15px 0" hidden aria-label="AI setup">
+                <strong>Connect your AI Coach</strong>
+                <p id="coach-setup-message">AI is not connected yet.</p>
+                <details><summary>What is needed?</summary>
+                  <ol>
+                    <li>Run the Node version of Cutline on a private HTTPS host.</li>
+                    <li>In the host’s secret settings, add <code>CUTLINE_ACCESS_PASSWORD</code>, <code>GEMINI_API_KEY</code>, and <code>CUTLINE_AI_ENABLED=true</code>.</li>
+                    <li>Open the hosted app and tap <b>Test selected AI</b>. Configuration alone is not a live test.</li>
+                  </ol>
+                  <p>Never put your key in this page, GitHub, screenshots, or chat. Google’s quota and possible charges apply.</p>
+                </details>
+              </section>
               <div class="messages" id="chat-messages" aria-live="polite"></div>
               <form class="chat-form" id="chat-form">
                 <div class="chat-form-box">
@@ -750,6 +770,16 @@
                 <label class="field-label" for="coach-video-url">OPTIONAL YOUTUBE LINK · ATTACHED TO EACH GEMINI REQUEST</label>
                 <div class="link-form"><input class="text-field" id="coach-video-url" type="url" maxlength="2048" placeholder="https://youtube.com/watch?v=…"><button class="button small" id="clear-coach-video" type="button">Clear</button></div>
                 <p class="chat-disclaimer">Use this for follow-up questions about the same video. It stays in this tab until cleared and is sent again with each confirmed Gemini request; repeated analysis may use quota or incur costs.</p>
+                <div class="focus-options">
+                  <label class="check-control" for="coach-focus"><input type="checkbox" id="coach-focus"><span>Take a closer look at a fast play</span></label>
+                  <div id="coach-focus-fields" hidden>
+                    <p>Choose up to 90 seconds from the original video. Use MM:SS or seconds. Gemini is asked to sample 3 frames per second; this can use more quota and still miss details.</p>
+                    <div class="field-pair">
+                      <div><label class="field-label" for="coach-focus-start">FROM · MM:SS OR SECONDS</label><input class="text-field" id="coach-focus-start" type="text" maxlength="12" placeholder="0:15"></div>
+                      <div><label class="field-label" for="coach-focus-end">TO · MM:SS OR SECONDS</label><input class="text-field" id="coach-focus-end" type="text" maxlength="12" placeholder="1:00"></div>
+                    </div>
+                  </div>
+                </div>
                 <div class="coach-options">
                   <label for="coach-engine"><span>AI engine</span><select class="select-field" id="coach-engine" aria-label="Choose AI engine"><option value="gemini">Gemini · video + text</option><option value="arena">Arena · text only</option></select></label>
                   <label><input type="checkbox" id="coach-research" disabled><span>Google Search research <b>(optional; may cost extra)</b></span></label>
@@ -1103,22 +1133,44 @@
       function addMessage(role, text, extra = {}) {
         return addMessageToChat(activeChat() || makeChat(), role, text, extra);
       }
+      function parseFocusTime(value) {
+        const text = String(value || '').trim();
+        if (!/^\d+(?::\d{1,2}){0,2}$/.test(text)) return null;
+        const parts = text.split(':').map(Number);
+        if (parts.slice(1).some(part => part >= 60)) return null;
+        const seconds = parts.reduce((total, part) => total * 60 + part, 0);
+        return Number.isSafeInteger(seconds) && seconds <= 12 * 60 * 60 ? seconds : null;
+      }
       function submitPrompt(text, mode) {
         const engine = document.getElementById('coach-engine').value === 'arena' ? 'arena' : 'gemini';
         const youtubeUrl = engine === 'gemini' ? document.getElementById('coach-video-url').value.trim() : '';
         const prompt = String(text || '').trim() || (youtubeUrl ? 'Summarize this video and suggest possible sports-edit moments.' : '');
         if (!prompt) { showToast('Paste a YouTube link or enter a sports-edit question first.'); return; }
-        switchView('coach');
+        if (currentView !== 'coach') switchView('coach');
         document.getElementById('chat-input').value = prompt;
         if (coachInFlight) { showToast('A Coach request is already in progress.'); return; }
         if ((engine === 'gemini' && !aiConnection.coachReady) || (engine === 'arena' && !aiConnection.arenaReady)) {
           showToast('The selected AI engine is not configured. Nothing was sent.');
           return;
         }
+        let videoFocus = null;
+        if (engine === 'gemini' && document.getElementById('coach-focus').checked) {
+          const startSeconds = parseFocusTime(document.getElementById('coach-focus-start').value);
+          const endSeconds = parseFocusTime(document.getElementById('coach-focus-end').value);
+          if (startSeconds === null || endSeconds === null || endSeconds <= startSeconds || endSeconds - startSeconds > 90) {
+            showToast('Choose a valid start and end no more than 90 seconds apart.');
+            document.getElementById('coach-focus-start').focus(); return;
+          }
+          if (!youtubeUrl && !/https:\/\/(?:[a-z0-9-]+\.)*(?:youtube\.com|youtu\.be)\//i.test(prompt)) {
+            showToast('Paste a public YouTube video link for fast-action focus.'); return;
+          }
+          videoFocus = { startSeconds, endSeconds };
+        }
         pendingCoach = {
           prompt,
           engine,
           youtubeUrl,
+          videoFocus,
           mode: mode || 'brainstorm',
           chatId: activeChat()?.id || null,
           research: engine === 'gemini' && document.getElementById('coach-research').checked,
@@ -1131,6 +1183,7 @@
           ? 'Privacy and cost: Arena and its model provider terms, quotas and possible charges apply. Do not send private information you do not want to share.'
           : 'Privacy and cost: Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.';
         const extras = [];
+        if (pendingCoach.videoFocus) extras.push(`Gemini is asked to focus on ${momentTime(videoFocus.startSeconds)}–${momentTime(videoFocus.endSeconds)} of the original video at 3 sampled frames per second. This can use more quota or cost more, and details can still be missed.`);
         if (pendingCoach.research) extras.push('Google Search adds a second Gemini request and may incur additional charges. Search results and suggestions are shown only in this tab.');
         if (pendingCoach.arena) extras.push('Arena will receive your message, up to six recent chat messages and the Gemini answer for creative direction. It requires separate API access and may charge separately; Arena does not watch the video.');
         document.getElementById('coach-consent-extras').textContent = extras.join(' ') || (engine === 'arena' ? 'No Gemini or Google Search request is selected. Switch to Gemini mode to analyze a public YouTube video.' : 'No Search or Arena request is selected; title and hashtag ideas are not current research.');
@@ -1175,7 +1228,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Coach-Consent': 'yes' },
             signal: coachAbortController.signal,
-            body: JSON.stringify({ prompt: request.prompt, engine: request.engine, youtubeUrl:request.youtubeUrl, mode: request.mode, history, research: request.research, arena: request.arena }),
+            body: JSON.stringify({ prompt: request.prompt, engine: request.engine, youtubeUrl:request.youtubeUrl, videoFocus:request.videoFocus, mode: request.mode, history, research: request.research, arena: request.arena }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `Coach request failed (${response.status}).`);
@@ -1185,6 +1238,8 @@
             provider: payload.provider === 'arena' ? 'arena' : 'gemini',
             clips: Array.isArray(payload.clips) ? payload.clips : [],
             youtubeUrl: typeof payload.youtubeUrl === 'string' ? payload.youtubeUrl : null,
+            videoFocus: request.videoFocus,
+            editRecipe: payload.editRecipe && typeof payload.editRecipe === 'object' ? payload.editRecipe : null,
             researchAttempted: request.research,
             hasResearch: !!payload.research,
             researchError: typeof payload.researchError === 'string' ? payload.researchError : '',
@@ -1216,6 +1271,22 @@
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor(seconds % 3600 / 60);
         return (hours ? hours + ':' + String(minutes).padStart(2, '0') : String(minutes)) + ':' + String(seconds % 60).padStart(2, '0');
+      }
+      function focusSuggestedClip(clip, youtubeUrl) {
+        if (!aiConnection.coachReady || !youtubeUrl) { showToast('Connect Gemini and attach the source video first.'); return; }
+        const start = Math.max(0, Math.floor(Number(clip.startSeconds)) - 3);
+        const end = Math.min(12 * 60 * 60, Math.ceil(Number(clip.endSeconds)) + 3);
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end <= start || end - start > 90) { showToast('That moment cannot be used as a focus range.'); return; }
+        document.getElementById('coach-engine').value = 'gemini'; updateCoachConnection();
+        document.getElementById('coach-video-url').value = youtubeUrl;
+        document.getElementById('coach-focus').checked = true;
+        document.getElementById('coach-focus-fields').hidden = false;
+        document.getElementById('coach-focus-start').value = momentTime(start);
+        document.getElementById('coach-focus-end').value = momentTime(end);
+        const input = document.getElementById('chat-input');
+        if (!input.value.trim()) input.value = 'Take a closer look at this play. Describe what is visible and suggest a precise edit, marking any uncertain details.';
+        input.focus();
+        showToast('Focus range prepared. Review it and tap Send; nothing was sent yet.');
       }
       function createSourceLink(url, title) {
         const safe = safeWebUrl(url);
@@ -1327,9 +1398,17 @@
           const title = document.createElement('h3'); title.textContent = 'Start with a sports moment.';
           const copy = document.createElement('p'); copy.textContent = 'Paste a public YouTube video link for possible highlights, a summary, edit ideas, titles and hashtags. A separate authorized video file is needed to export a cut.';
           const chips = document.createElement('div'); chips.className = 'chip-row';
-          [['Build a 15-second edit', 'Plan a 15-second sports edit with a hook, context and payoff.'], ['Give me title ideas', 'Give me punchy, original TikTok title ideas for a sports edit.'], ['Find a trend format', 'Give me a checklist for researching current U.S. TikTok sports trends.']].forEach(([label, prompt]) => {
+          [['Find highlight moments', 'Find up to four promising sports moments in the attached video. Explain why each works, use approximate source timestamps, and mark uncertainty.', 'edit'], ['Break down the edit', 'Summarize the attached video and explain the visible pacing, framing, text and sound choices without guessing.', 'edit'], ['Build a 15-second edit', 'Plan a 15-second sports edit with a hook, context and payoff.', 'edit'], ['Give me title ideas', 'Give me punchy, original TikTok titles, a caption and relevant hashtags. Do not claim they are trending without sources.', 'titles'], ['Research a trend format', 'Give me a checklist for researching current U.S. TikTok sports trends.', 'trends']].forEach(([label, prompt, mode]) => {
             const button = document.createElement('button'); button.className = 'prompt-chip'; button.textContent = label;
-            button.addEventListener('click', () => submitPrompt(prompt, label.includes('title') ? 'titles' : (label.includes('trend') ? 'trends' : 'edit')));
+            button.addEventListener('click', () => {
+              const input = document.getElementById('chat-input');
+              const existing = input.value.trim();
+              const combined = prompt + (existing ? '\n\n' + existing : '');
+              if (combined.length > 1600) { showToast('Shorten your message before adding this prompt.'); return; }
+              input.value = combined;
+              document.getElementById('chat-mode').value = mode;
+              input.focus(); showToast('Prompt ready. Add a video link if needed, then tap Send.');
+            });
             chips.appendChild(button);
           });
           welcome.append(glyph, title, copy, chips); box.appendChild(welcome); return;
@@ -1339,7 +1418,7 @@
           const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = message.role === 'user' ? 'YOU' : 'CL';
           const body = document.createElement('div'); body.className = 'message-body';
           const meta = document.createElement('div'); meta.className = 'message-meta';
-          meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : (message.kind === 'ai' ? (message.provider === 'arena' ? 'Arena Coach · text only' : 'Gemini Coach · verify details') : (message.kind === 'error' ? 'Request status' : 'Saved Coach note / preview'));
+          meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : (message.kind === 'ai' ? (message.provider === 'arena' ? 'Arena Coach · text only' : 'Gemini Coach · verify details' + (message.videoFocus ? ' · focused 3 FPS' : '')) : (message.kind === 'error' ? 'Request status' : 'Saved Coach note / preview'));
           const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = message.text;
           body.append(meta, bubble);
           if (message.kind === 'ai' && Array.isArray(message.clips) && message.clips.length) {
@@ -1351,7 +1430,12 @@
               const reason = document.createElement('small'); reason.textContent = String(clip.reason || 'Review this approximate moment in the source video.');
               const use = document.createElement('button'); use.type = 'button'; use.className = 'button small'; use.textContent = 'Use this moment in editor';
               use.addEventListener('click', () => prepareSuggestedClip(clip, message.youtubeUrl));
-              card.append(heading, reason, use); list.appendChild(card);
+              const buttons = document.createElement('div'); buttons.className = 'message-actions'; buttons.appendChild(use);
+              if (message.provider !== 'arena' && message.youtubeUrl) {
+                const focus = document.createElement('button'); focus.type = 'button'; focus.className = 'button small'; focus.textContent = 'Take a closer look';
+                focus.addEventListener('click', () => focusSuggestedClip(clip, message.youtubeUrl)); buttons.appendChild(focus);
+              }
+              card.append(heading, reason, buttons); list.appendChild(card);
             });
             if (message.provider !== 'arena' && message.youtubeUrl && message.clips.length > 1) {
               const assemble = document.createElement('button'); assemble.type = 'button'; assemble.className = 'button small';
@@ -1371,14 +1455,18 @@
               arena.append(title, text, note);
               if (message.arenaRecipe && typeof message.arenaRecipe === 'object') {
                 const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Arena edit recipe';
-                apply.addEventListener('click', () => applyArenaRecipe(message.arenaRecipe)); arena.appendChild(apply);
+                apply.addEventListener('click', () => applyEditRecipe(message.arenaRecipe, 'Arena')); arena.appendChild(apply);
               }
               body.appendChild(arena);
             }
             const actions = document.createElement('div'); actions.className = 'message-actions';
+            if (message.provider !== 'arena' && message.editRecipe && typeof message.editRecipe === 'object') {
+              const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Gemini edit recipe';
+              apply.addEventListener('click', () => applyEditRecipe(message.editRecipe, 'Gemini')); actions.appendChild(apply);
+            }
             if (message.provider === 'arena' && message.arenaRecipe && typeof message.arenaRecipe === 'object') {
               const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Arena edit recipe';
-              apply.addEventListener('click', () => applyArenaRecipe(message.arenaRecipe)); actions.appendChild(apply);
+              apply.addEventListener('click', () => applyEditRecipe(message.arenaRecipe, 'Arena')); actions.appendChild(apply);
             }
             if (message.provider !== 'arena' && typeof message.youtubeUrl === 'string' && message.youtubeUrl) {
               const attach = document.createElement('button'); attach.type = 'button'; attach.className = 'button small'; attach.textContent = 'Attach video for follow-up';
@@ -1751,6 +1839,7 @@
       const aiConfirmButton = document.getElementById('confirm-ai-review');
       const defaultAIUploadLimit = 14 * 1024 * 1024;
       let aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
+      let aiServiceReachable = false;
       let creatorConfigured = false;
       let creatorData = null;
       let creatorBusy = false;
@@ -1772,10 +1861,18 @@
         document.getElementById('starter-ai-badge').textContent = badge;
         const research = document.getElementById('coach-research');
         const arena = document.getElementById('coach-arena');
+        const focus = document.getElementById('coach-focus');
         research.disabled = arenaOnly || !aiConnection.researchReady;
         arena.disabled = arenaOnly || !aiConnection.coachReady || !aiConnection.arenaReady;
+        focus.disabled = arenaOnly || !aiConnection.coachReady;
         if (research.disabled) research.checked = false;
         if (arena.disabled) arena.checked = false;
+        if (focus.disabled) focus.checked = false;
+        document.getElementById('coach-focus-fields').hidden = !focus.checked;
+        document.getElementById('coach-setup').hidden = aiConnection.coachReady;
+        document.getElementById('coach-setup-message').textContent = aiServiceReachable
+          ? 'This app can reach its server, but Gemini is not configured. Arena, if available, is text only and cannot analyze YouTube video.'
+          : 'No AI server could be reached. The browser-only preview cannot run AI; open a securely hosted Node version to use Gemini.';
         const available = [];
         if (aiConnection.researchReady) available.push('Google Search');
         if (aiConnection.arenaReady) available.push('Arena');
@@ -1787,6 +1884,7 @@
           : 'Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.';
       }
       document.getElementById('coach-engine').addEventListener('change', updateCoachConnection);
+      document.getElementById('coach-focus').addEventListener('change', event => { document.getElementById('coach-focus-fields').hidden = !event.target.checked; });
       document.getElementById('clear-coach-video').addEventListener('click', () => { document.getElementById('coach-video-url').value=''; showToast('Video attachment cleared.'); });
       document.getElementById('coach-cancel').addEventListener('click', () => { if (coachAbortController) coachAbortController.abort(); });
       document.getElementById('coach-test').addEventListener('click', async () => {
@@ -1819,6 +1917,7 @@
           const response = await fetch('/api/health', { cache: 'no-store' });
           if (!response.ok) throw new Error('AI service status unavailable.');
           const data = await response.json();
+          aiServiceReachable = true;
           const limit = Number(data.maxVideoBytes);
           aiConnection = {
             ready: data.videoReviewReady === true,
@@ -1845,6 +1944,7 @@
             aiReviewOpen.textContent = 'AI setup needed';
           }
         } catch (_) {
+          aiServiceReachable = false;
           aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
           updateCoachConnection();
           creatorConfigured = false; renderTikTokProfile();
@@ -2347,7 +2447,8 @@
         document.getElementById('zoom-animate').checked = false; updateStage(); showToast('Frame transform reset.');
       });
 
-      function applyArenaRecipe(recipe) {
+      function applyEditRecipe(recipe, provider) {
+        const source = provider === 'Arena' ? 'Arena' : 'Gemini';
         if (isExporting || exportPreparing || !recipe || typeof recipe !== 'object') { showToast('Finish the export before changing the edit.'); return; }
         const safe = {};
         for (const [key, max] of [['headline',80],['supportingLine',100]]) if (typeof recipe[key] === 'string') safe[key] = recipe[key].slice(0,max);
@@ -2355,9 +2456,17 @@
         for (const [key, min, max] of [['zoomStart',50,250],['zoomEnd',50,250],['panX',-100,100],['panY',-100,100],['vignette',0,100]]) if (typeof recipe[key] === 'number' && Number.isFinite(recipe[key]) && recipe[key] >= min && recipe[key] <= max) safe[key] = Math.round(recipe[key]);
         for (const [key, values] of [['fadeIn',[0,.5,1,2]],['fadeOut',[0,.5,1,2]],['audioFadeIn',[0,.5,1,2]],['audioFadeOut',[0,.5,1,2]],['speed',[.5,.75,1,1.25,1.5,2]]]) if (typeof recipe[key] === 'number' && values.includes(recipe[key])) safe[key] = recipe[key];
         if (typeof recipe.animateZoom === 'boolean') safe.animateZoom = recipe.animateZoom;
-        if (!Object.keys(safe).length) { showToast('This Arena response has no supported edit settings.'); return; }
-        const summary = Object.entries(safe).map(([key,value]) => `${key}: ${String(value)}`).join('\n');
-        if (!confirm('Arena suggested these editable settings:\n\n' + summary + '\n\nApply them? Existing values for these controls will be replaced. Arena did not see your local video.')) return;
+        if (!Object.keys(safe).length) { showToast('This response has no supported edit settings.'); return; }
+        const names = { headline:'Headline', supportingLine:'Supporting line', titlePosition:'Text position', titleAnimation:'Text animation', colorPreset:'Color preset', zoomStart:'Starting zoom (%)', zoomEnd:'Ending zoom (%)', animateZoom:'Animate zoom', panX:'Horizontal position', panY:'Vertical position', vignette:'Vignette', fadeIn:'Video fade in (seconds)', fadeOut:'Video fade out (seconds)', audioFadeIn:'Audio fade in (seconds)', audioFadeOut:'Audio fade out (seconds)', speed:'Speed (×)' };
+        const summary = Object.entries(safe).map(([key,value]) => `${names[key] || key}: ${String(value)}`).join('\n');
+        const changesCutSpeed = Object.hasOwn(safe, 'speed') && selectedCut >= 0 && !!editCuts[selectedCut];
+        const speedNotice = changesCutSpeed ? '\n\nSpeed changes only the selected timeline cut; Undo cut can restore that speed.' : (Object.hasOwn(safe, 'speed') ? '\n\nSpeed changes the current trim.' : '');
+        const provenance = source === 'Arena' ? 'Arena did not see your local video.' : 'Gemini’s settings are suggestions; it did not inspect your local file.';
+        if (!confirm(`${source} suggested these editable settings:\n\n${summary}\n\nApply them? Existing values for these controls will be replaced. Undo cut does not restore the other look settings.${speedNotice}\n\n${provenance}`)) return;
+        stopSequencePlayback();
+        if (changesCutSpeed && editCuts[selectedCut].speed !== safe.speed) {
+          rememberCuts(); editCuts[selectedCut] = { ...editCuts[selectedCut], speed:safe.speed };
+        }
         if (safe.colorPreset) document.querySelector(`.preset-button[data-preset="${safe.colorPreset}"]`).click();
         const mapping = { headline:'overlay-input', supportingLine:'subtitle-input', titlePosition:'title-position', titleAnimation:'text-animation', zoomStart:'zoom-start', zoomEnd:'zoom-end', panX:'pan-x', panY:'pan-y', vignette:'vignette-range', fadeIn:'fade-in', fadeOut:'fade-out', audioFadeIn:'audio-fade-in', audioFadeOut:'audio-fade-out', speed:'playback-speed' };
         for (const [key, id] of Object.entries(mapping)) if (Object.hasOwn(safe, key)) {
@@ -2365,7 +2474,7 @@
           control.dispatchEvent(new Event('input', { bubbles:true })); control.dispatchEvent(new Event('change', { bubbles:true }));
         }
         if (Object.hasOwn(safe, 'animateZoom')) document.getElementById('zoom-animate').checked = safe.animateZoom;
-        updateStage(); switchView('editor'); showToast('Arena recipe applied. Preview and adjust before exporting.');
+        renderTimeline(); updateStage(); switchView('editor'); showToast(`${source} recipe applied. Preview and adjust before exporting.`);
       }
 
       const sourceVolume = document.getElementById('source-volume');

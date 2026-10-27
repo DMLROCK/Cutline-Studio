@@ -75,10 +75,30 @@ test('request normalization finds one link and bounds prompt and chat context', 
   assert.throws(() => normalizeCoachRequest({ prompt: `Analyze ${YOUTUBE}`, youtubeUrl: 'https://youtu.be/abcdefghijk' }), /one YouTube/i);
 });
 
+test('fast-action focus requires a bounded original-video range and never affects Arena', () => {
+  const focus = { startSeconds: 125, endSeconds: 185, fps: 999 };
+  const request = normalizeCoachRequest({ prompt: `Review ${YOUTUBE}`, videoFocus: focus });
+  assert.deepEqual(request.videoFocus, { startSeconds:125, endSeconds:185 });
+  const payload = coachRequestPayload(request);
+  assert.deepEqual(payload.contents[0].parts[0].video_metadata, { start_offset:'125s', end_offset:'185s', fps:3 });
+  assert.match(payload.contents[0].parts[1].text, /original-video seconds/i);
+  const ordinary = coachRequestPayload(normalizeCoachRequest({ prompt: `Review ${YOUTUBE}` }));
+  assert.equal(ordinary.contents[0].parts[0].video_metadata, undefined);
+  for (const bad of [
+    {startSeconds:-1,endSeconds:20}, {startSeconds:5,endSeconds:5}, {startSeconds:5,endSeconds:96},
+    {startSeconds:'5',endSeconds:50}, {startSeconds:1.5,endSeconds:20}, {startSeconds:0,endSeconds:43201},
+    [], 'invalid', {},
+  ]) assert.throws(() => normalizeCoachRequest({ prompt:`Review ${YOUTUBE}`, videoFocus:bad }), /focus range/i);
+  assert.throws(() => normalizeCoachRequest({ prompt:'No link here', videoFocus:focus }), /requires a public YouTube/i);
+  assert.throws(() => normalizeCoachRequest({ prompt:`Review ${YOUTUBE}`, engine:'arena', videoFocus:focus }), /Gemini mode/i);
+});
+
 test('only a normalized YouTube URL is attached; ordinary URLs remain text', () => {
   const video = coachRequestPayload(normalizeCoachRequest({ prompt: `Please analyze https://youtu.be/9hE5-98ZeCg?t=7` }));
   assert.equal(video.contents[0].parts[0].file_data.file_uri, YOUTUBE);
   assert.equal(video.generationConfig.responseMimeType, 'application/json');
+  assert.equal(video.generationConfig.temperature, undefined);
+  assert.equal(video.generationConfig.maxOutputTokens, 8192);
   assert.match(video.systemInstruction.parts[0].text, /uncertain/i);
   assert.match(video.systemInstruction.parts[0].text, /story order/i);
   const edit = coachRequestPayload(normalizeCoachRequest({ prompt:'Make an edit', mode:'edit' }));
@@ -110,6 +130,32 @@ test('invalid, excessive or invented clip ranges are never turned into editor ac
   const unstructured = parseCoachResponse({ candidates: [{ content: { parts: [{ text: 'Maybe 00:05 is a clip.' }] } }] }, true);
   assert.deepEqual(unstructured.clips, []);
   assert.match(unstructured.answer, /Maybe/);
+});
+
+test('incomplete or blocked Gemini output never becomes an answer or editor action', () => {
+  const candidate = { finishReason:'MAX_TOKENS', content:{ parts:[{ text:JSON.stringify({answer:'partial',clips:[{startSeconds:1,endSeconds:2}]}) }] } };
+  assert.equal(parseCoachResponse({candidates:[candidate]}, true), null);
+  candidate.finishReason = 'SAFETY'; assert.equal(parseCoachResponse({candidates:[candidate]}, true), null);
+  candidate.finishReason = 'STOP'; assert.equal(parseCoachResponse({candidates:[candidate]}, true).answer, 'partial');
+  assert.equal(parseResearchResponse({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'partial'}]}}]}),null);
+});
+
+test('Gemini edit recipes are allowlisted and focused clips must fit the selected source interval', () => {
+  const response = { candidates:[{ content:{ parts:[{ text:JSON.stringify({
+    answer:'Here are edit ideas.',
+    clips:[
+      {label:'Within range', startSeconds:125.1, endSeconds:130, reason:'Payoff', overlay:'Play'},
+      {label:'Starts before range', startSeconds:1, endSeconds:5},
+      {label:'Ends after range', startSeconds:175, endSeconds:190},
+    ],
+    editRecipe:{ headline:'Highlight', supportingLine:'X'.repeat(120), colorPreset:'punch', zoomStart:120, zoomEnd:151,
+      animateZoom:true, titleAnimation:'pop', speed:1.25, panX:999, fadeIn:5, unknown:'do not execute' },
+  }) }] } }] };
+  const result = parseCoachResponse(response, true, {startSeconds:125,endSeconds:185});
+  assert.deepEqual(result.clips.map(clip=>clip.label), ['Within range']);
+  assert.deepEqual(result.editRecipe, { headline:'Highlight', supportingLine:'X'.repeat(100), titleAnimation:'pop', colorPreset:'punch', zoomStart:120, zoomEnd:151, animateZoom:true, speed:1.25 });
+  const malformed = { candidates:[{ content:{ parts:[{ text:JSON.stringify({answer:'Plain answer',clips:[],editRecipe:{speed:'2',colorPreset:'javascript:bad'}}) }] } }] };
+  assert.equal(parseCoachResponse(malformed, false).editRecipe, undefined);
 });
 
 test('grounded citations use UTF-8 byte offsets per part and unsafe sources are ignored', () => {
@@ -203,6 +249,20 @@ test('a confirmed YouTube chat sends only the link and bounded context to Gemini
   assert.doesNotMatch(text, /test-only-google-key|test-only-coach-password/);
 });
 
+test('a confirmed focused Gemini request forwards only the bounded interval and safe edit recipe', async t => {
+  const calls = [];
+  const responseBody = { answer:'Review the possible highlight.', clips:[
+    {label:'Inside',startSeconds:126,endSeconds:140,reason:'A play',overlay:'Highlight'},
+    {label:'Outside',startSeconds:10,endSeconds:15},
+  ], editRecipe:{headline:'Big play',zoomStart:120,zoomEnd:140,animateZoom:true,speed:1.25,unknown:'ignore'} };
+  const base = await start(t, { fetchImpl:async (url, options) => { calls.push({url,options}); return google(responseBody); } });
+  const result = await (await request(base, {prompt:`Analyze ${YOUTUBE}`,videoFocus:{startSeconds:125,endSeconds:155,fps:200}})).json();
+  assert.deepEqual(result.clips.map(clip=>clip.label), ['Inside']);
+  assert.deepEqual(result.editRecipe,{headline:'Big play',zoomStart:120,zoomEnd:140,animateZoom:true,speed:1.25});
+  assert.deepEqual(JSON.parse(calls[0].options.body).contents[0].parts[0].video_metadata,{start_offset:'125s',end_offset:'155s',fps:3});
+  assert.doesNotMatch(JSON.stringify(result), /test-only-google-key/);
+});
+
 test('opt-in Google Search and Arena calls have separate inputs and return sourced/creative output', async t => {
   const calls = [];
   const base = await start(t, {
@@ -289,11 +349,32 @@ test('provider failures are meaningful and optional failures preserve the base a
   assert.doesNotMatch(await limited.text(), /secret diagnostic/);
 });
 
+test('provider errors offer safe setup guidance without returning upstream diagnostics', async t => {
+  for (const [status, pattern] of [[400,/video is public/i],[401,/not authorized/i],[403,/account access/i],[404,/model/i],[503,/temporarily unavailable/i]]) {
+    const base = await start(t, { fetchImpl:async () => new Response('secret diagnostic', {status}) });
+    const response = await request(base);
+    assert.equal(response.status,502);
+    const body = await response.text();
+    assert.match(body,pattern); assert.doesNotMatch(body,/secret diagnostic|test-only-google-key/);
+  }
+});
+
+test('a truncated Gemini response is reported without exposing partial output', async t => {
+  const base = await start(t, { fetchImpl:async () => new Response(JSON.stringify({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'private partial result'}]}}]}),{status:200}) });
+  const response = await request(base);
+  assert.equal(response.status,502);
+  const result = await response.json();
+  assert.match(result.error,/output limit/i);
+  assert.doesNotMatch(JSON.stringify(result),/private partial result/);
+});
+
 test('invalid JSON, oversized bodies and invalid links never reach the provider', async t => {
   let calls = 0;
   const base = await start(t, { fetchImpl: async () => { calls++; return google(); } });
   assert.equal((await request(base, {}, { raw: '{invalid' })).status, 400);
   assert.equal((await request(base, { prompt: 'https://youtube.com/playlist?list=123' })).status, 400);
+  assert.equal((await request(base, { prompt:`Analyze ${YOUTUBE}`, videoFocus:{startSeconds:0,endSeconds:91} })).status, 400);
+  assert.equal((await request(base, { prompt:'No video attached', videoFocus:{startSeconds:0,endSeconds:30} })).status, 400);
   const result = await new Promise((resolve, reject) => {
     const req = http.request(base + '/api/coach', { method: 'POST', headers: {
       Authorization: AUTH, Origin: base, 'Content-Type': 'application/json', 'X-Coach-Consent': 'yes', 'Content-Length': MAX_COACH_BODY_BYTES + 1,
