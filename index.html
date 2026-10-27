@@ -209,7 +209,23 @@
     .chat-input::placeholder { color: var(--muted-2); }
     .chat-form-bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .chat-form-bottom .select-field { border: 0; background-color: transparent; }
-    .chat-disclaimer { margin: 8px 2px 0; color: var(--muted-2); font-size: 9px; }
+    .chat-disclaimer { margin: 8px 2px 0; color: var(--muted-2); font-size: 10px; line-height: 1.5; }
+    .coach-options { display: flex; flex-wrap: wrap; gap: 7px 16px; padding: 10px 2px 2px; }
+    .coach-options label { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .coach-options input { margin: 2px 0 0; accent-color: var(--lime); }
+    .clip-suggestions { display: grid; gap: 8px; margin-top: 10px; }
+    .clip-suggestion { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .clip-suggestion strong, .clip-suggestion small { display: block; }
+    .clip-suggestion strong { font-size: 11px; }
+    .clip-suggestion small { margin: 3px 0 8px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .message-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .research-result { margin-top: 10px; padding: 12px; border: 1px solid rgba(142,199,241,.25); border-radius: 11px; background: var(--surface); }
+    .research-result h4 { margin: 0 0 6px; color: var(--blue); font-size: 11px; }
+    .research-text { color: var(--ink); font-size: 11px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .research-text a, .research-sources a { color: var(--blue); }
+    .research-sources { display: grid; gap: 5px; margin-top: 9px; font-size: 10px; overflow-wrap: anywhere; }
+    .search-suggestions { display: block; width: 100%; margin-top: 9px; }
+    .research-note { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
     .coach-side { display: grid; gap: 13px; }
     .side-panel { padding: 17px; }
     .side-panel p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -514,7 +530,7 @@
       <div class="side-spacer"></div>
       <div class="side-note">
         <div class="side-note-top"><span class="status-dot"></span> FREE PROTOTYPE</div>
-        <p>Chats save on this device. Coach replies are samples; sign-in and cloud sync are not connected.</p>
+        <p>Chats save on this device. AI needs private server setup; account sign-in and cloud sync are not connected.</p>
       </div>
       <div class="side-footer">
         <div class="avatar">CL</div>
@@ -553,7 +569,7 @@
               <h1>Make your next<br>cut <span>count.</span></h1>
               <p>Turn a big sports moment into a clear story—with a stronger hook, tighter pacing and an edit plan that fits TikTok.</p>
               <div class="hero-actions">
-                <button class="button primary" data-go="coach">Brainstorm an idea <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
+                <button class="button primary" data-go="coach">Analyze a YouTube link <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
                 <button class="button" data-go="breakdown"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add a clip</button>
               </div>
             </div>
@@ -583,12 +599,12 @@
                 <div>
                   <div class="panel-kicker">IDEA DESK · 01</div>
                   <h2>What are you working on?</h2>
-                  <p class="panel-description">Drop in a matchup, player, moment or rough edit idea to start a coaching session.</p>
+                  <p class="panel-description">Paste a public YouTube video link or describe the sports moment you want to turn into a story.</p>
                 </div>
-                <span class="offline-badge">DEMO · AI OFFLINE</span>
+                <span class="offline-badge" id="starter-ai-badge">AI CHECKING</span>
               </div>
               <form id="starter-form">
-                <textarea class="composer-field" id="starter-prompt" maxlength="1600" placeholder="Example: I want to make a 15-second edit about a late-game comeback. Help me build the hook and beat-by-beat structure…" aria-label="Describe your sports edit idea"></textarea>
+                <textarea class="composer-field" id="starter-prompt" maxlength="1600" placeholder="Paste a public YouTube link and ask for highlights, a summary, a vertical edit plan, titles and hashtags…" aria-label="Describe your sports edit idea or paste a YouTube link"></textarea>
                 <div class="composer-bottom">
                   <div class="composer-tools">
                     <select class="select-field" id="starter-mode" aria-label="Choose coaching mode">
@@ -597,7 +613,7 @@
                       <option value="edit">Edit structure</option>
                       <option value="trends">Trend research plan</option>
                     </select>
-                    <button class="button primary" type="submit">Preview response <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
+                    <button class="button primary" type="submit">Ask the Coach <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
                   </div>
                 </div>
               </form>
@@ -606,7 +622,7 @@
                 <button class="prompt-chip" data-prompt="Write punchy TikTok titles and a focused hashtag set for my next basketball edit." data-mode="titles">Titles + hashtags</button>
                 <button class="prompt-chip" data-prompt="Help me plan a 15-second edit with a hook, context, payoff and end-loop." data-mode="edit">Plan a 15-second cut</button>
               </div>
-              <p class="helper-note"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> Preview mode only: no real AI model is connected, and the sample response does not search current trends.</p>
+              <p class="helper-note"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> AI requires server setup and your confirmation. A YouTube link does not download footage; use an authorized copy to make the edit.</p>
             </section>
 
             <aside class="panel research-panel">
@@ -659,19 +675,19 @@
 
         <section class="view" id="view-coach" aria-labelledby="coach-title">
           <div class="page-head">
-            <div><div class="eyebrow"><span class="mini-line"></span> CREATIVE PARTNER</div><h1 id="coach-title">AI Sports Coach</h1><p class="page-subtitle">Brainstorm formats, hooks, captions and edit structure for your next post.</p></div>
+            <div><div class="eyebrow"><span class="mini-line"></span> CREATIVE PARTNER</div><h1 id="coach-title">AI Sports Coach</h1><p class="page-subtitle">Paste a public YouTube link for a summary, potential moments and a TikTok edit plan.</p></div>
             <button class="button" id="coach-new-session"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> New chat</button>
           </div>
           <div class="coach-layout">
             <section class="panel chat-panel" aria-label="Coach conversation">
               <div class="chat-header">
-                <div class="coach-identity"><span class="coach-avatar"><svg class="icon"><use href="#i-spark"></use></svg></span><div><strong>Cutline Coach</strong><small>Sports-edit brainstorming workspace</small></div></div>
-                <span class="offline-badge">SAMPLE · NOT LIVE AI</span>
+                <div class="coach-identity"><span class="coach-avatar"><svg class="icon"><use href="#i-spark"></use></svg></span><div><strong>Cutline Coach</strong><small>Video insights &amp; creative direction</small></div></div>
+                <span class="offline-badge" id="coach-ai-badge">AI CHECKING</span>
               </div>
               <div class="messages" id="chat-messages" aria-live="polite"></div>
               <form class="chat-form" id="chat-form">
                 <div class="chat-form-box">
-                  <textarea class="chat-input" id="chat-input" maxlength="1600" placeholder="Ask for a hook, edit map, title or idea…" aria-label="Message the Coach"></textarea>
+                  <textarea class="chat-input" id="chat-input" maxlength="1600" placeholder="Paste a YouTube link, or ask for highlights, titles and hashtags…" aria-label="Message the Coach"></textarea>
                   <div class="chat-form-bottom">
                     <select class="select-field" id="chat-mode" aria-label="Choose Coach mode">
                       <option value="brainstorm">Brainstorm</option>
@@ -679,10 +695,15 @@
                       <option value="edit">Edit structure</option>
                       <option value="trends">Trend research plan</option>
                     </select>
-                    <button class="button primary small" type="submit">Send <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
+                    <button class="button primary small" id="coach-send" type="submit">Send <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
                   </div>
                 </div>
-                <p class="chat-disclaimer">Responses in this prototype are sample templates. No model is called and no live web research is performed.</p>
+                <div class="coach-options">
+                  <label><input type="checkbox" id="coach-research" disabled><span>Google Search research <b>(optional; may cost extra)</b></span></label>
+                  <label><input type="checkbox" id="coach-arena" disabled><span>Arena creative polish <b>(optional; separate access and costs)</b></span></label>
+                </div>
+                <p class="chat-disclaimer" id="coach-options-status">Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.</p>
+                <p class="chat-disclaimer">Messages and public links go to Google only after you confirm. For a fresh video analysis, paste its link again. YouTube videos are not downloaded; supply the same authorized file to edit.</p>
               </form>
             </section>
             <aside class="coach-side">
@@ -692,21 +713,21 @@
                 <button class="button small" style="width:100%;margin-top:10px" data-go="library">Open history</button>
               </section>
               <section class="panel side-panel">
-                <div class="panel-kicker">A GOOD PROMPT HAS…</div><h2>Four useful ingredients</h2>
+                <div class="panel-kicker">FROM LINK TO CUT</div><h2>How it works</h2>
                 <div class="tip-list">
-                  <div class="tip-row"><span class="tip-number">01</span><span><b>Moment:</b> what happened in the game?</span></div>
-                  <div class="tip-row"><span class="tip-number">02</span><span><b>Viewer:</b> fans, casuals or a team community?</span></div>
-                  <div class="tip-row"><span class="tip-number">03</span><span><b>Format:</b> story, comedy, stats or debate?</span></div>
-                  <div class="tip-row"><span class="tip-number">04</span><span><b>Length:</b> target seconds and platform.</span></div>
+                  <div class="tip-row"><span class="tip-number">01</span><span>Paste one public YouTube video link and confirm the AI request.</span></div>
+                  <div class="tip-row"><span class="tip-number">02</span><span>Review the summary, editing ideas and approximate highlight timestamps.</span></div>
+                  <div class="tip-row"><span class="tip-number">03</span><span>Choose a moment and select your authorized copy of the <b>same full video</b>.</span></div>
+                  <div class="tip-row"><span class="tip-number">04</span><span>Adjust the vertical cut, export it, then add a sound in TikTok.</span></div>
                 </div>
               </section>
               <section class="panel side-panel">
-                <div class="panel-kicker">CURRENTNESS CHECK</div><h2>Verify before you post</h2><p>For fresh results, injuries, trends or sounds, check the date and primary source. The sample Coach cannot verify today’s NBA or TikTok activity.</p>
+                <div class="panel-kicker">CURRENTNESS CHECK</div><h2>Verify before you post</h2><p>Without optional Search, Coach ideas are not live research. Check sources, dates and TikTok trends; AI can miss fast action or misread a timestamp.</p>
                 <a class="source-link" href="https://ads.tiktok.com/creative/creativeCenter/trends" target="_blank" rel="noopener noreferrer">Open trend tools <span>↗</span></a>
               </section>
             </aside>
           </div>
-          <div class="page-footer"><span>Preview responses are labeled and not generated by a connected model.</span><span>Rights and music permissions still matter.</span></div>
+          <div class="page-footer"><span>AI can make mistakes; review every suggested clip and claim.</span><span>Rights and music permissions still matter.</span></div>
         </section>
 
         <section class="view" id="view-breakdown" aria-labelledby="breakdown-title">
@@ -785,6 +806,7 @@
           <div class="editor-layout">
             <section class="panel editor-workspace">
               <div class="editor-toolbar"><div><b style="font-size:11px">Preview canvas</b><span id="editor-file-label" style="display:block;margin-top:3px">Choose a clip to open your edit desk</span></div><button class="button small" id="editor-import"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add clip</button></div>
+              <div class="editor-note" id="editor-suggestion-status" role="status" hidden></div>
               <div class="editor-stage-wrap">
                 <div class="editor-stage" id="editor-stage">
                   <video id="editor-player" playsinline controls></video>
@@ -836,7 +858,9 @@
                 <div class="music-row"><input type="file" id="music-file" accept="audio/*" hidden><button class="button small" id="choose-music" type="button"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add your audio</button><button class="button small" id="preview-music" type="button" hidden><svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview</button><button class="button small" id="remove-music" type="button" hidden>Remove</button><span id="music-label">No added audio</span></div>
                 <div class="slider-control"><label for="music-volume">Added audio <output id="music-volume-value">24%</output></label><input class="control-range" id="music-volume" type="range" min="0" max="100" value="24"></div>
                 <audio id="music-player" hidden></audio>
-                <div class="editor-note">No built-in commercial song library. Use original audio or a track you have rights to use.</div>
+                <div class="editor-note"><b>Add a TikTok sound after export:</b> save your edit, open TikTok, upload it, then tap <b>Add sound</b>. Choose audio allowed for your account and use. TikTok’s catalog is not connected to Cutline.</div>
+                <a class="source-link" href="https://ads.tiktok.com/business/creativecenter/music/pc/en" target="_blank" rel="noopener noreferrer">Browse TikTok Commercial Music Library <span>↗</span></a>
+                <a class="source-link" href="https://ads.tiktok.com/help/article/how-to-use-the-commercial-music-library" target="_blank" rel="noopener noreferrer">Check music usage guidance <span>↗</span></a>
               </section>
               <section class="panel control-panel export-panel">
                 <div class="panel-kicker">FINISH YOUR CUT</div><h3>Render &amp; save</h3><p>Export a short clip from this browser. This is a real-time render; avoid switching apps until it finishes.</p>
@@ -896,6 +920,19 @@
       <div class="modal-notice">Google OAuth, email delivery, accounts and cross-device sync require a connected provider. Do not enter a real verification code here.</div>
     </section>
   </div>
+  <div class="modal-backdrop" id="coach-consent-modal" hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="coach-consent-title">
+      <button class="icon-button modal-close" id="close-coach-consent" aria-label="Close Coach confirmation"><svg class="icon"><use href="#i-close"></use></svg></button>
+      <span class="offline-badge">CONFIRM THIS REQUEST</span>
+      <h2 id="coach-consent-title">Send this to AI Coach?</h2>
+      <p>Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.</p>
+      <div class="modal-notice"><b>Privacy and cost:</b> Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.</div>
+      <p id="coach-consent-extras" class="research-note"></p>
+      <label class="check-control" style="align-items:flex-start;margin-top:12px"><input id="coach-consent" type="checkbox"><span>I understand what will be sent and have permission to submit it. I have checked any provider costs.</span></label>
+      <button class="button primary" id="confirm-coach" type="button" disabled>Confirm and send</button>
+      <div class="modal-notice" style="border-color:var(--line);background:var(--surface-2)">No API key is stored in this page. A separate authorized source file is needed to make a video.</div>
+    </section>
+  </div>
   <div class="modal-backdrop" id="ai-review-modal" hidden>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="ai-review-title">
       <button class="icon-button modal-close" id="close-ai-review" aria-label="Close AI review"><svg class="icon"><use href="#i-close"></use></svg></button>
@@ -922,6 +959,12 @@
       let currentFile = null;
       let currentFileUrl = null;
       let toastTimer = null;
+      let pendingCoach = null;
+      let coachInFlight = false;
+      let pendingClipSuggestion = null;
+      // Grounded Search content is displayed only in this tab and is not saved
+      // into the browser's long-lived chat history.
+      const researchByMessage = new Map();
 
       function loadState() {
         try {
@@ -965,41 +1008,210 @@
         renderAll();
         return chat;
       }
-      function demoReply(prompt, mode) {
-        const topic = String(prompt || '').trim().replace(/\s+/g, ' ');
-        const subject = topic.length > 100 ? topic.slice(0, 97) + '…' : topic;
-        const disclaimer = '\n\nPreview only: this is a sample template, not a live AI response. No model was called and no current trend or fact was checked.';
-        if (mode === 'trends') {
-          return 'TREND RESEARCH PLAN\n\n1. Check TikTok Creative Center and Creator Search Insights for the U.S. and your target time window.\n2. Look for repeatable formats—not just a high-view post—and note the creator, post date, sound and visible engagement.\n3. Make the sports angle yours: add original narration, a stat or a clear point of view.\n4. Recheck the trend before posting; trends move quickly.\n\nYour prompt: “' + subject + '”' + disclaimer;
-        }
-        if (mode === 'titles') {
-          return 'TITLE + CAPTION WORKSHOP\n\nHook options to customize:\n• “This is where the game flipped.”\n• “The detail everyone missed in that play…”\n• “One moment. Three reasons it mattered.”\n\nCaption starter: “What changed the game for you?”\n\nHashtag mix: use a few relevant player/team/game tags plus a broader basketball or sports-edit tag. Check current spelling, relevance and trend activity before posting—don’t stuff unrelated tags.\n\nYour topic: “' + subject + '”' + disclaimer;
-        }
-        if (mode === 'edit') {
-          return 'EDIT MAP STARTER\n\n0.0–1.5s  HOOK — lead with the surprising result or reaction.\n1.5–4.0s  CONTEXT — identify the matchup and what was at stake.\n4.0–10.0s  BUILD — use only the clearest beats; let important audio or reaction breathe.\n10.0–14.0s  PAYOFF — land the best moment, stat or original observation.\n14.0–16.0s  LOOP / QUESTION — end cleanly or invite a specific fan take.\n\nFor “' + subject + '”, replace each placeholder with verified details and footage you have permission to use.' + disclaimer;
-        }
-        return 'IDEA STARTER\n\nFor “' + subject + '”, try building around one clear fan question:\n\n• OPEN: put the outcome, reaction or debate first.\n• CONTEXT: explain the setup in one short line.\n• PAYOFF: show the key moment or your original analysis.\n• CLOSE: ask a specific question that invites real opinions.\n\nKeep the edit focused on one story. Use licensed or authorized footage and music, and verify names, dates and stats before publishing.' + disclaimer;
-      }
-      function addMessage(role, text) {
-        let chat = activeChat();
-        if (!chat) chat = makeChat();
-        chat.messages.push({ role, text, at: Date.now() });
+      function addMessageToChat(chat, role, text, extra = {}) {
+        if (!chat || !state.chats.includes(chat)) return null;
+        const message = { id: 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), role, text, at: Date.now(), ...extra };
+        chat.messages.push(message);
         chat.updatedAt = Date.now();
         if (role === 'user' && chat.title === 'New session') chat.title = shortTitle(text);
-        state.activeChat = chat.id;
         saveState();
+        return message;
+      }
+      function addMessage(role, text, extra = {}) {
+        return addMessageToChat(activeChat() || makeChat(), role, text, extra);
       }
       function submitPrompt(text, mode) {
         const prompt = String(text || '').trim();
-        if (!prompt) { showToast('Add a sports-edit question or idea first.'); return; }
-        if (!activeChat()) makeChat();
-        addMessage('user', prompt);
-        addMessage('assistant', demoReply(prompt, mode || 'brainstorm'));
+        if (!prompt) { showToast('Paste a YouTube link or enter a sports-edit question first.'); return; }
         switchView('coach');
-        const input = document.getElementById('chat-input');
-        if (input) input.value = '';
+        document.getElementById('chat-input').value = prompt;
+        if (coachInFlight) { showToast('A Coach request is already in progress.'); return; }
+        if (!aiConnection.coachReady) {
+          showToast('AI Coach is not configured. Nothing was sent; ask the owner to set up Gemini.');
+          return;
+        }
+        pendingCoach = {
+          prompt,
+          mode: mode || 'brainstorm',
+          chatId: activeChat()?.id || null,
+          research: document.getElementById('coach-research').checked,
+          arena: document.getElementById('coach-arena').checked,
+        };
+        const extras = [];
+        if (pendingCoach.research) extras.push('Google Search adds a second Gemini request and may incur additional charges. Search results and suggestions are shown only in this tab.');
+        if (pendingCoach.arena) extras.push('Arena will receive your message and the Gemini answer for creative polish. It requires separate API access and may charge separately; Arena does not watch the video.');
+        document.getElementById('coach-consent-extras').textContent = extras.join(' ') || 'No Search or Arena request is selected; title and hashtag ideas are not current research.';
+        document.getElementById('coach-consent').checked = false;
+        document.getElementById('confirm-coach').disabled = true;
+        document.getElementById('coach-consent-modal').hidden = false;
+      }
+      function setCoachSending(sending) {
+        coachInFlight = sending;
+        const send = document.getElementById('coach-send');
+        send.disabled = sending;
+        send.textContent = sending ? 'Analyzing…' : 'Send';
+      }
+      function closeCoachConsent() {
+        document.getElementById('coach-consent-modal').hidden = true;
+        pendingCoach = null;
+      }
+      document.getElementById('close-coach-consent').addEventListener('click', closeCoachConsent);
+      document.getElementById('coach-consent-modal').addEventListener('click', event => { if (event.target.id === 'coach-consent-modal') closeCoachConsent(); });
+      document.getElementById('coach-consent').addEventListener('change', event => { document.getElementById('confirm-coach').disabled = !event.target.checked || coachInFlight; });
+      document.getElementById('confirm-coach').addEventListener('click', async () => {
+        if (!pendingCoach || coachInFlight || !document.getElementById('coach-consent').checked || !aiConnection.coachReady) return;
+        const request = pendingCoach;
+        let chat = request.chatId ? state.chats.find(item => item.id === request.chatId) : null;
+        if (request.chatId && !chat) { closeCoachConsent(); showToast('That chat no longer exists. Start a new chat and try again.'); return; }
+        if (!chat) chat = makeChat();
+        const history = chat.messages.filter(message => message.role === 'user' || (message.role === 'assistant' && message.kind === 'ai'))
+          .slice(-6).map(message => ({ role: message.role, text: String(message.text || '').slice(0, 1200) }));
+        addMessageToChat(chat, 'user', request.prompt);
+        closeCoachConsent();
+        document.getElementById('chat-input').value = '';
+        document.getElementById('starter-prompt').value = '';
+        setCoachSending(true);
         renderAll();
-        showToast('Session saved on this device. The reply is a labeled preview.');
+        showToast('Coach is analyzing. Keep this page open.');
+        try {
+          const response = await fetch('/api/coach', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Coach-Consent': 'yes' },
+            body: JSON.stringify({ prompt: request.prompt, mode: request.mode, history, research: request.research, arena: request.arena }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Coach request failed (${response.status}).`);
+          if (typeof payload.answer !== 'string' || !payload.answer.trim()) throw new Error('The Coach returned no readable answer.');
+          const message = addMessageToChat(chat, 'assistant', payload.answer, {
+            kind: 'ai',
+            clips: Array.isArray(payload.clips) ? payload.clips : [],
+            youtubeUrl: typeof payload.youtubeUrl === 'string' ? payload.youtubeUrl : null,
+            researchAttempted: request.research,
+            hasResearch: !!payload.research,
+            researchError: typeof payload.researchError === 'string' ? payload.researchError : '',
+            arenaText: typeof payload.arena === 'string' ? payload.arena : '',
+            arenaError: typeof payload.arenaError === 'string' ? payload.arenaError : '',
+          });
+          if (message && payload.research) researchByMessage.set(message.id, payload.research);
+          if (message) showToast('Coach response received. Check the footage and facts.');
+          else showToast('The chat was deleted while the request was running.');
+        } catch (error) {
+          addMessageToChat(chat, 'assistant', error.message || 'The Coach request did not complete.', { kind: 'error' });
+          showToast(error.message || 'The Coach request did not complete.');
+        } finally {
+          setCoachSending(false);
+          renderAll();
+        }
+      });
+      function safeWebUrl(value) {
+        try {
+          const parsed = new URL(String(value || ''));
+          return parsed.protocol === 'https:' && !parsed.username && !parsed.password ? parsed.href : '';
+        } catch (_) { return ''; }
+      }
+      function momentTime(value) {
+        const seconds = Math.max(0, Math.floor(Number(value) || 0));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor(seconds % 3600 / 60);
+        return (hours ? hours + ':' + String(minutes).padStart(2, '0') : String(minutes)) + ':' + String(seconds % 60).padStart(2, '0');
+      }
+      function createSourceLink(url, title) {
+        const safe = safeWebUrl(url);
+        if (!safe) return null;
+        const link = document.createElement('a');
+        link.href = safe; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.textContent = title;
+        return link;
+      }
+      function buildSearchSuggestions(html) {
+        // Google's widget is untrusted HTML. Validate the complete inert template
+        // before attaching it; if it uses anything outside this small safe set,
+        // withhold the grounded response instead of modifying its suggestions.
+        try {
+          const template = document.createElement('template');
+          template.innerHTML = html;
+          const tags = new Set(['style', 'div', 'span', 'a', 'svg', 'g', 'path', 'circle', 'rect', 'title', 'br', 'strong']);
+          const attributes = new Set(['class', 'id', 'role', 'aria-label', 'aria-hidden', 'href', 'target', 'rel', 'style', 'xmlns', 'viewbox', 'width', 'height', 'fill', 'fill-rule', 'clip-rule', 'd', 'cx', 'cy', 'r', 'x', 'y', 'rx', 'ry', 'stroke', 'stroke-width', 'focusable']);
+          const unsafeCss = /\\|(?:url|image-set|expression)\s*\(|@import|@namespace|:host|::slotted/i;
+          for (const node of template.content.querySelectorAll('*')) {
+            const name = node.localName.toLowerCase();
+            if (!tags.has(name)) return null;
+            if (name === 'style' && unsafeCss.test(node.textContent || '')) return null;
+            for (const attribute of node.attributes) {
+              const key = attribute.name.toLowerCase();
+              if (!attributes.has(key) || key.startsWith('on')) return null;
+              if (key !== 'href' && unsafeCss.test(attribute.value)) return null;
+              if (key === 'xmlns' && attribute.value !== 'http://www.w3.org/2000/svg') return null;
+              if (key === 'target' && !['_blank', '_self'].includes(attribute.value)) return null;
+              if (key === 'href') {
+                if (name !== 'a') return null;
+                let link;
+                try { link = new URL(attribute.value); } catch (_) { return null; }
+                if (link.protocol !== 'https:' || link.username || link.password || link.port || link.hostname !== 'www.google.com' || link.pathname !== '/search') return null;
+              }
+            }
+          }
+          const host = document.createElement('div'); host.className = 'search-suggestions';
+          host.setAttribute('aria-label', 'Google Search suggestions');
+          host.attachShadow({ mode: 'open' }).appendChild(template.content);
+          return host;
+        } catch (_) { return null; }
+      }
+      function renderResearch(body, message) {
+        if (!message.researchAttempted) return;
+        const research = researchByMessage.get(message.id);
+        const section = document.createElement('section'); section.className = 'research-result';
+        const title = document.createElement('h4'); title.textContent = 'GOOGLE SEARCH RESEARCH'; section.appendChild(title);
+        if (research && typeof research.text === 'string') {
+          const hasSuggestions = typeof research.searchHtml === 'string' && research.searchHtml !== '';
+          const suggestions = hasSuggestions ? buildSearchSuggestions(research.searchHtml) : null;
+          if (hasSuggestions && !suggestions) {
+            const note = document.createElement('p'); note.className = 'research-note';
+            note.textContent = 'The required Google suggestions could not be displayed safely, so this research response was not shown. The base Coach answer is not live research.';
+            section.appendChild(note); body.appendChild(section); return;
+          }
+          const sources = Array.isArray(research.sources) ? research.sources : [];
+          const supports = Array.isArray(research.supports) ? research.supports.slice().sort((a, b) => a.endIndex - b.endIndex) : [];
+          const text = document.createElement('div'); text.className = 'research-text';
+          let cursor = 0;
+          supports.forEach(support => {
+            const end = Number(support.endIndex);
+            if (!Number.isInteger(end) || end < cursor || end > research.text.length) return;
+            text.appendChild(document.createTextNode(research.text.slice(cursor, end)));
+            (Array.isArray(support.indices) ? support.indices : []).forEach(index => {
+              if (!Number.isInteger(index) || !sources[index]) return;
+              const link = createSourceLink(sources[index].url, '[' + (index + 1) + ']');
+              if (link) { link.title = String(sources[index].title || 'Source'); text.appendChild(link); }
+            });
+            cursor = end;
+          });
+          text.appendChild(document.createTextNode(research.text.slice(cursor)));
+          section.appendChild(text);
+          const sourceList = document.createElement('div'); sourceList.className = 'research-sources';
+          sources.forEach((source, index) => {
+            const link = createSourceLink(source?.url, '[' + (index + 1) + '] ' + String(source?.title || 'Source'));
+            if (link) sourceList.appendChild(link);
+          });
+          if (sourceList.childNodes.length) section.appendChild(sourceList);
+          if (suggestions) section.appendChild(suggestions);
+          const note = document.createElement('p'); note.className = 'research-note';
+          note.textContent = research.hasSources
+            ? 'Sources were returned, but not every claim or trend is necessarily supported. Check each source and date. Research is shown only in this tab, not saved in chat history.'
+            : 'No source links were returned. Treat this as unverified ideas, not current research. Research is shown only in this tab, not saved in chat history.';
+          section.appendChild(note);
+        } else {
+          const note = document.createElement('p'); note.className = 'research-note';
+          note.textContent = message.researchError || (message.hasResearch ? 'Search research was available only in the original tab. Run it again for current sources.' : 'Search research was not completed.');
+          section.appendChild(note);
+        }
+        body.appendChild(section);
+      }
+      async function copyCoachText(text) {
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(text);
+          showToast('Coach text copied.');
+        } catch (_) { showToast('Copy is unavailable here. Select the text to copy it.'); }
       }
       function renderChat() {
         const box = document.getElementById('chat-messages');
@@ -1010,8 +1222,8 @@
           const welcome = document.createElement('div');
           welcome.className = 'welcome-message';
           const glyph = document.createElement('div'); glyph.className = 'welcome-glyph'; glyph.innerHTML = '<svg class="icon"><use href="#i-spark"></use></svg>';
-          const title = document.createElement('h3'); title.textContent = 'Let’s shape a sports story.';
-          const copy = document.createElement('p'); copy.textContent = 'Ask for an original edit idea, a stronger opening, a title set or a beat-by-beat structure. Sample replies are clearly labeled until a real AI provider is connected.';
+          const title = document.createElement('h3'); title.textContent = 'Start with a sports moment.';
+          const copy = document.createElement('p'); copy.textContent = 'Paste a public YouTube video link for possible highlights, a summary, edit ideas, titles and hashtags. A separate authorized video file is needed to export a cut.';
           const chips = document.createElement('div'); chips.className = 'chip-row';
           [['Build a 15-second edit', 'Plan a 15-second sports edit with a hook, context and payoff.'], ['Give me title ideas', 'Give me punchy, original TikTok title ideas for a sports edit.'], ['Find a trend format', 'Give me a checklist for researching current U.S. TikTok sports trends.']].forEach(([label, prompt]) => {
             const button = document.createElement('button'); button.className = 'prompt-chip'; button.textContent = label;
@@ -1024,9 +1236,38 @@
           const row = document.createElement('div'); row.className = 'message ' + (message.role === 'user' ? 'user' : 'assistant');
           const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = message.role === 'user' ? 'YOU' : 'CL';
           const body = document.createElement('div'); body.className = 'message-body';
-          const meta = document.createElement('div'); meta.className = 'message-meta'; meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : 'Cutline Coach · preview reply';
+          const meta = document.createElement('div'); meta.className = 'message-meta';
+          meta.textContent = message.role === 'user' ? 'You · ' + formatTime(message.at) : (message.kind === 'ai' ? 'Gemini Coach · verify details' : (message.kind === 'error' ? 'Request status' : 'Saved Coach note / preview'));
           const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = message.text;
-          body.append(meta, bubble); row.append(avatar, body); box.appendChild(row);
+          body.append(meta, bubble);
+          if (message.kind === 'ai' && Array.isArray(message.clips) && message.clips.length) {
+            const list = document.createElement('div'); list.className = 'clip-suggestions';
+            message.clips.forEach(clip => {
+              if (!clip || !Number.isFinite(Number(clip.startSeconds)) || !Number.isFinite(Number(clip.endSeconds))) return;
+              const card = document.createElement('div'); card.className = 'clip-suggestion';
+              const heading = document.createElement('strong'); heading.textContent = `${momentTime(clip.startSeconds)} – ${momentTime(clip.endSeconds)} · ${String(clip.label || 'Suggested moment')}`;
+              const reason = document.createElement('small'); reason.textContent = String(clip.reason || 'Review this approximate moment in the source video.');
+              const use = document.createElement('button'); use.type = 'button'; use.className = 'button small'; use.textContent = 'Use this moment in editor';
+              use.addEventListener('click', () => prepareSuggestedClip(clip, message.youtubeUrl));
+              card.append(heading, reason, use); list.appendChild(card);
+            });
+            body.appendChild(list);
+          }
+          if (message.kind === 'ai') {
+            renderResearch(body, message);
+            if (message.arenaText || message.arenaError) {
+              const arena = document.createElement('section'); arena.className = 'research-result';
+              const title = document.createElement('h4'); title.textContent = 'ARENA CREATIVE POLISH · TEXT ONLY';
+              const text = document.createElement('div'); text.className = 'research-text'; text.textContent = message.arenaText || message.arenaError;
+              const note = document.createElement('p'); note.className = 'research-note'; note.textContent = 'Arena received the request and Gemini’s unverified answer; it did not independently view the video or check trends.';
+              arena.append(title, text, note); body.appendChild(arena);
+            }
+            const actions = document.createElement('div'); actions.className = 'message-actions';
+            const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'button small'; copy.textContent = 'Copy ideas';
+            copy.addEventListener('click', () => copyCoachText([message.text, message.arenaText].filter(Boolean).join('\n\n')));
+            actions.appendChild(copy); body.appendChild(actions);
+          }
+          row.append(avatar, body); box.appendChild(row);
         });
         box.scrollTop = box.scrollHeight;
       }
@@ -1115,10 +1356,14 @@
       const fileDetails = document.getElementById('file-details');
       function humanSize(bytes) { if (!bytes) return 'Size unavailable'; const units = ['B','KB','MB','GB']; let value = bytes, unit = 0; while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; } return value.toFixed(unit > 0 ? 1 : 0) + ' ' + units[unit]; }
       function setFile(file) {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export before changing videos.'); return; }
         if (!file || !file.type.startsWith('video/')) { showToast('Please choose a supported video file.'); return; }
         if (currentFileUrl) URL.revokeObjectURL(currentFileUrl);
         currentFile = file;
         currentFileUrl = URL.createObjectURL(file);
+        document.getElementById('trim-in').value = '0';
+        document.getElementById('trim-out').value = '0';
+        document.getElementById('export-result').hidden = true;
         [breakdownPlayer, editorPlayer, analysisSampler].forEach(video => { video.src = currentFileUrl; video.load(); });
         breakdownWrap.hidden = false;
         document.getElementById('scan-output').hidden = true;
@@ -1137,8 +1382,17 @@
         fileDetails.append(info, clear);
         document.getElementById('report-panel').hidden = true;
         showToast('Video loaded locally. It has not been uploaded or analyzed.');
+        if (pendingClipSuggestion) {
+          const pending = pendingClipSuggestion;
+          waitForMetadata(editorPlayer).then(() => {
+            if (currentFile !== file || pendingClipSuggestion !== pending) return;
+            pendingClipSuggestion = null;
+            applySuggestedClip(pending);
+          }).catch(error => { showSuggestionStatus(error.message || 'Could not read the selected video. Choose another file.'); });
+        }
       }
       function clearFile() {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export before removing the video.'); return; }
         if (currentFileUrl) URL.revokeObjectURL(currentFileUrl);
         currentFile = null; currentFileUrl = null;
         [breakdownPlayer, editorPlayer, analysisSampler].forEach(video => { video.pause(); video.removeAttribute('src'); video.load(); });
@@ -1165,7 +1419,8 @@
         let parsed;
         try { parsed = new URL(input.value.trim()); } catch (_) { showToast('Enter a complete https link.'); return; }
         const host = parsed.hostname.toLowerCase();
-        if (parsed.protocol !== 'https:' || !(host === 'youtu.be' || host.endsWith('youtube.com') || host.endsWith('tiktok.com'))) { showToast('For now, add a public HTTPS YouTube or TikTok link.'); return; }
+        const knownHost = host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'tiktok.com' || host.endsWith('.tiktok.com');
+        if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !knownHost) { showToast('For now, add a public HTTPS YouTube or TikTok link.'); return; }
         if (!state.sourceLinks.some(item => item.url === parsed.href)) {
           const label = host.includes('tiktok') ? 'TikTok reference · ' + host : 'YouTube reference · ' + host;
           state.sourceLinks.unshift({ id: 'l-' + Date.now().toString(36), url: parsed.href, label, createdAt: Date.now() });
@@ -1184,6 +1439,61 @@
           video.addEventListener('loadedmetadata', () => { clearTimeout(timer); resolve(); }, { once: true });
           video.addEventListener('error', () => { clearTimeout(timer); reject(new Error('This browser could not read the uploaded video.')); }, { once: true });
         });
+      }
+      function showSuggestionStatus(text) {
+        const status = document.getElementById('editor-suggestion-status');
+        status.textContent = text;
+        status.hidden = false;
+      }
+      function prepareSuggestedClip(clip, youtubeUrl) {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the current export first.'); return; }
+        const start = Number(clip?.startSeconds), end = Number(clip?.endSeconds);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end - start < 0.1 || end - start > 60) {
+          showToast('This suggested time range is invalid. Choose another moment.'); return;
+        }
+        const suggestion = { start, end, overlay: String(clip.overlay || '').slice(0, 80), youtubeUrl: String(youtubeUrl || '') };
+        switchView('editor');
+        if (!currentFile) {
+          pendingClipSuggestion = suggestion;
+          showSuggestionStatus(`Suggested ${momentTime(start)}–${momentTime(end)}. Choose an authorized copy of the same FULL video; YouTube footage is not downloaded.`);
+          showToast('Choose your authorized copy of the same full video.');
+          fileInput.click();
+          return;
+        }
+        applySuggestedClip(suggestion);
+      }
+      async function applySuggestedClip(suggestion) {
+        if (!currentFile || isExporting || exportPreparing) return;
+        const file = currentFile;
+        try {
+          await waitForMetadata(editorPlayer);
+          if (currentFile !== file || isExporting || exportPreparing) return;
+          const duration = editorPlayer.duration;
+          if (!Number.isFinite(duration) || suggestion.start >= duration || suggestion.end > duration + 0.05) {
+            pendingClipSuggestion = suggestion;
+            showSuggestionStatus('The suggested time does not fit this file. Choose the same full video with Add clip, or trim manually. AI timestamps can be wrong.');
+            showToast('The suggested time does not fit this file.');
+            return;
+          }
+          const approved = window.confirm(`Apply the approximate ${momentTime(suggestion.start)}–${momentTime(suggestion.end)} moment to “${file.name}”?\n\nThis must be an authorized copy of the same full YouTube video. Verify the AI timestamp. The editor will set the trim, 9:16 frame and suggested headline.`);
+          if (!approved) {
+            pendingClipSuggestion = suggestion;
+            showSuggestionStatus('Not applied. Choose the matching authorized full video with Add clip, or pick another moment.');
+            return;
+          }
+          pendingClipSuggestion = null;
+          document.getElementById('trim-in').value = suggestion.start.toFixed(1);
+          document.getElementById('trim-out').value = Math.min(duration, suggestion.end).toFixed(1);
+          document.querySelector('.ratio-button[data-ratio="portrait"]').click();
+          document.getElementById('overlay-input').value = suggestion.overlay;
+          updateStage();
+          editorPlayer.currentTime = suggestion.start;
+          showSuggestionStatus(`Approximate ${momentTime(suggestion.start)}–${momentTime(suggestion.end)} applied. Preview and adjust it before exporting; footage remains on this device.`);
+          showToast('Suggested moment applied. Preview it before export.');
+        } catch (error) {
+          showSuggestionStatus(error.message || 'This browser could not read the selected video.');
+          showToast('The suggested moment could not be applied.');
+        }
       }
       async function waitForDecodedFrame(video) {
         await waitForMetadata(video);
@@ -1261,9 +1571,25 @@
       const aiReviewOpen = document.getElementById('ai-review-open');
       const aiConfirmButton = document.getElementById('confirm-ai-review');
       const defaultAIUploadLimit = 14 * 1024 * 1024;
-      let aiConnection = { ready: false, model: '', maxVideoBytes: defaultAIUploadLimit };
+      let aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
       let aiReviewInFlight = false;
       let aiReviewConsentFile = null;
+      function updateCoachConnection() {
+        const configured = aiConnection.coachReady;
+        document.getElementById('coach-ai-badge').textContent = configured ? 'GEMINI CONFIGURED' : 'AI SETUP NEEDED';
+        document.getElementById('starter-ai-badge').textContent = configured ? 'GEMINI CONFIGURED' : 'AI SETUP NEEDED';
+        const research = document.getElementById('coach-research');
+        const arena = document.getElementById('coach-arena');
+        research.disabled = !aiConnection.researchReady; arena.disabled = !aiConnection.arenaReady;
+        if (research.disabled) research.checked = false;
+        if (arena.disabled) arena.checked = false;
+        const available = [];
+        if (aiConnection.researchReady) available.push('Google Search');
+        if (aiConnection.arenaReady) available.push('Arena polish');
+        document.getElementById('coach-options-status').textContent = (available.length
+          ? `${available.join(' and ')} configured, not connection-tested. Select only if you accept possible provider charges.`
+          : 'Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.');
+      }
       async function refreshAIConnection() {
         const status = document.getElementById('ai-review-status');
         const detail = document.getElementById('ai-review-detail');
@@ -1275,9 +1601,13 @@
           const limit = Number(data.maxVideoBytes);
           aiConnection = {
             ready: data.videoReviewReady === true,
+            coachReady: data.coachReady === true,
+            researchReady: data.researchReady === true,
+            arenaReady: data.arenaReady === true,
             model: data.model || 'configured video model',
             maxVideoBytes: Number.isSafeInteger(limit) && limit > 0 ? limit : defaultAIUploadLimit,
           };
+          updateCoachConnection();
           document.getElementById('ai-review-limit').textContent = `AI uploads are capped at ${humanSize(aiConnection.maxVideoBytes)}.`;
           if (aiConnection.ready) {
             badge.textContent = 'VIDEO AI CONFIGURED';
@@ -1291,7 +1621,8 @@
             aiReviewOpen.textContent = 'AI setup needed';
           }
         } catch (_) {
-          aiConnection = { ready: false, model: '', maxVideoBytes: defaultAIUploadLimit };
+          aiConnection = { ready: false, coachReady: false, researchReady: false, arenaReady: false, model: '', maxVideoBytes: defaultAIUploadLimit };
+          updateCoachConnection();
           badge.textContent = 'VIDEO AI UNAVAILABLE';
           status.textContent = 'No AI service is connected';
           detail.textContent = 'The local scanner still works; the model endpoint is unavailable.';
@@ -1389,6 +1720,7 @@
       let exportAnimation = 0;
       let audioGraph = null;
       let isExporting = false;
+      let exportPreparing = false;
 
       function timeLabel(seconds) {
         if (!Number.isFinite(seconds)) return '00:00';
@@ -1494,6 +1826,7 @@
       musicVolume.addEventListener('input', updateAudioLevels);
       document.getElementById('choose-music').addEventListener('click', () => musicInput.click());
       musicInput.addEventListener('change', () => {
+        if (isExporting || exportPreparing) { musicInput.value = ''; showToast('Finish or cancel the export before changing audio.'); return; }
         const file = musicInput.files && musicInput.files[0];
         if (!file || !file.type.startsWith('audio/')) { if (file) showToast('Choose a supported audio file.'); return; }
         if (musicObjectUrl) URL.revokeObjectURL(musicObjectUrl);
@@ -1508,6 +1841,7 @@
         showToast('Audio added locally. Use tracks you have rights to use.');
       });
       document.getElementById('preview-music').addEventListener('click', async event => {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export before previewing audio.'); return; }
         if (!musicObjectUrl) return;
         try {
           if (audioGraph) await audioGraph.context.resume();
@@ -1516,6 +1850,7 @@
         } catch (_) { showToast('Your browser could not preview this audio file.'); }
       });
       document.getElementById('remove-music').addEventListener('click', () => {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export before changing audio.'); return; }
         musicPlayer.pause(); musicPlayer.removeAttribute('src'); musicPlayer.load();
         if (musicObjectUrl) URL.revokeObjectURL(musicObjectUrl);
         musicObjectUrl = null; document.getElementById('music-label').textContent = 'No added audio';
@@ -1643,7 +1978,7 @@
         const candidates = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
         return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
       }
-      function createExportResult(blob, mimeType) {
+      function createExportResult(blob, mimeType, warnings = []) {
         if (exportUrl) URL.revokeObjectURL(exportUrl);
         exportUrl = URL.createObjectURL(blob);
         const extension = (mimeType || blob.type).includes('mp4') ? 'mp4' : 'webm';
@@ -1663,79 +1998,101 @@
           } catch (error) { if (error.name !== 'AbortError') showToast('Use Download edit to save the export.'); }
         });
         actions.append(download, share);
-        const note = document.createElement('p'); note.className = 'editor-note'; note.style.margin = '9px 0 0'; note.textContent = 'Check the exported video on your phone before posting. The browser may choose a different codec or file extension depending on device support.';
-        exportResult.append(heading, video, actions, note); exportResult.hidden = false;
+        const note = document.createElement('p'); note.className = 'editor-note'; note.style.margin = '9px 0 0'; note.textContent = 'Save or share this file before leaving the page; it is not stored in the cloud. Open it in TikTok and use Add sound. Check the video first; MP4 or WebM support varies by device.';
+        exportResult.append(heading, video, actions, note);
+        if (warnings.length) {
+          const warning = document.createElement('p'); warning.className = 'editor-note'; warning.style.color = 'var(--orange)'; warning.textContent = warnings.join(' ');
+          exportResult.appendChild(warning);
+        }
+        if (extension !== 'mp4' || /vp0?9|opus/i.test(mimeType || '')) {
+          const compatibility = document.createElement('p'); compatibility.className = 'editor-note';
+          compatibility.textContent = 'This browser used a codec that TikTok may not accept, even in an MP4. If upload fails, try exporting on a browser/device that supports H.264 and AAC.';
+          exportResult.appendChild(compatibility);
+        }
+        exportResult.hidden = false;
       }
       async function startExport() {
+        if (isExporting || exportPreparing) { showToast('An export is already in progress.'); return; }
         if (!currentFile) { showToast('Add a local video clip before exporting.'); return; }
         if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { showToast('This browser does not support local video export. Try an updated Safari or Chrome browser.'); exportStatus.textContent = 'Canvas recording is not supported in this browser.'; return; }
-        try { await waitForDecodedFrame(editorPlayer); } catch (error) { showToast(error.message); return; }
-        const duration = Number.isFinite(editorPlayer.duration) ? editorPlayer.duration : 0;
-        const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
-        const end = Math.min(duration, Number(document.getElementById('trim-out').value) || duration);
-        if (end <= start) { showToast('Set an out-point later than the in-point.'); return; }
-        if (end - start > 60) { showToast('For a phone-friendly export, keep this first version to 60 seconds or less.'); return; }
-        const dimensions = getCanvasSize();
-        const canvas = document.createElement('canvas'); canvas.width = dimensions.width; canvas.height = dimensions.height;
-        const context = canvas.getContext('2d');
-        if (!context) { showToast('Could not start the export canvas.'); return; }
-        const stream = canvas.captureStream(24);
-        let tempAudioDestination = null;
+        exportPreparing = true; exportButton.disabled = true;
         try {
-          const graph = ensureAudioGraph();
-          if (graph) {
-            await graph.context.resume();
-            tempAudioDestination = graph.context.createMediaStreamDestination();
-            graph.videoGain.connect(tempAudioDestination);
-            if (graph.musicGain && musicObjectUrl) graph.musicGain.connect(tempAudioDestination);
-            tempAudioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-          }
-        } catch (error) { console.warn('Audio capture unavailable for this export', error); }
-        const mimeType = currentMimeType();
-        let recorder;
-        try { recorder = mimeType ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4200000, audioBitsPerSecond: 128000 }) : new MediaRecorder(stream); }
-        catch (error) { stream.getTracks().forEach(track => track.stop()); showToast('This browser could not start video recording.'); exportStatus.textContent = 'Could not start the recorder. Try a shorter clip or a different browser.'; return; }
-        exportRecorder = recorder; exportCancelled = false; isExporting = true;
-        exportResult.hidden = true; exportProgress.hidden = false; exportButton.disabled = true;
-        document.getElementById('cancel-export').hidden = false;
-        document.getElementById('export-progress-fill').style.width = '0%';
-        document.getElementById('export-progress-label').textContent = 'Preparing preview…';
-        document.getElementById('export-progress-value').textContent = '0%';
-        exportStatus.textContent = `Exporting ${timeLabel(end-start)} in real time. Keep Cutline open on this page.`;
-        const chunks = [];
-        recorder.addEventListener('dataavailable', event => { if (event.data && event.data.size) chunks.push(event.data); });
-        recorder.addEventListener('error', event => { console.warn('MediaRecorder error', event.error); exportStatus.textContent = 'Export stopped because the browser reported a recording error.'; });
-        recorder.addEventListener('stop', () => {
-          cancelAnimationFrame(exportAnimation); editorPlayer.pause(); musicPlayer.pause();
-          document.getElementById('preview-music').innerHTML = '<svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview';
-          if (tempAudioDestination) { try { audioGraph.videoGain.disconnect(tempAudioDestination); } catch (_) {} if (audioGraph.musicGain) { try { audioGraph.musicGain.disconnect(tempAudioDestination); } catch (_) {} } }
-          stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
-          isExporting = false; exportButton.disabled = false; exportProgress.hidden = true;
-          if (exportCancelled) { exportStatus.textContent = 'Export cancelled. Your source clip is unchanged.'; showToast('Export cancelled.'); return; }
-          const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' });
-          if (!blob.size) { exportStatus.textContent = 'The browser returned an empty export. Try a shorter clip or different browser.'; showToast('No video data was returned.'); return; }
-          createExportResult(blob, recorder.mimeType || mimeType || blob.type);
-          exportStatus.textContent = 'Your edited clip is ready. Preview it, then download or share it.';
-          showToast('Export complete. Check the file before posting.');
-        }, { once: true });
-        const paint = () => { if (!isExporting) return; drawEditorFrame(context, canvas.width, canvas.height); exportAnimation = requestAnimationFrame(paint); };
-        paint();
-        try {
-          await seekToFrame(editorPlayer, start);
-          if (exportCancelled) { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = 'Export cancelled before rendering began.'; showToast('Export cancelled.'); return; }
-          editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1;
-          if (musicObjectUrl) { musicPlayer.currentTime = 0; musicPlayer.loop = true; }
-          recorder.start(700);
-          if (musicObjectUrl) { try { await musicPlayer.play(); } catch (_) {} }
-          await editorPlayer.play();
-          document.getElementById('export-progress-label').textContent = 'Rendering…';
+          try { await waitForDecodedFrame(editorPlayer); } catch (error) { showToast(error.message); return; }
+          const duration = Number.isFinite(editorPlayer.duration) ? editorPlayer.duration : 0;
+          const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
+          const end = Math.min(duration, Number(document.getElementById('trim-out').value) || duration);
+          if (end <= start) { showToast('Set an out-point later than the in-point.'); return; }
+          if (end - start > 60) { showToast('For a phone-friendly export, keep this first version to 60 seconds or less.'); return; }
+          const dimensions = getCanvasSize();
+          const canvas = document.createElement('canvas'); canvas.width = dimensions.width; canvas.height = dimensions.height;
+          const context = canvas.getContext('2d');
+          if (!context) { showToast('Could not start the export canvas.'); return; }
+          const stream = canvas.captureStream(24);
+          const warnings = [];
+          let tempAudioDestination = null;
+          try {
+            const graph = ensureAudioGraph();
+            if (graph) {
+              await graph.context.resume();
+              tempAudioDestination = graph.context.createMediaStreamDestination();
+              graph.videoGain.connect(tempAudioDestination);
+              if (graph.musicGain && musicObjectUrl) graph.musicGain.connect(tempAudioDestination);
+              tempAudioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+            }
+          } catch (error) { console.warn('Audio capture unavailable for this export', error); }
+          if (!stream.getAudioTracks().length) warnings.push('Audio capture was unavailable; this export may be silent.');
+          const mimeType = currentMimeType();
+          let recorder;
+          try { recorder = mimeType ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4200000, audioBitsPerSecond: 128000 }) : new MediaRecorder(stream); }
+          catch (error) { stream.getTracks().forEach(track => track.stop()); showToast('This browser could not start video recording.'); exportStatus.textContent = 'Could not start the recorder. Try a shorter clip or a different browser.'; return; }
+          exportRecorder = recorder; exportCancelled = false; isExporting = true;
+          exportResult.hidden = true; exportProgress.hidden = false; exportButton.disabled = true;
           document.getElementById('cancel-export').hidden = false;
-        } catch (error) {
-          exportCancelled = true;
-          try { if (recorder.state !== 'inactive') recorder.stop(); } catch (_) {}
-          exportStatus.textContent = 'The browser could not play the source clip for export.';
-          if (!recorder.state || recorder.state === 'inactive') { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); }
-          showToast('Could not start playback for export. Try pressing play once, then export again.');
+          document.getElementById('export-progress-fill').style.width = '0%';
+          document.getElementById('export-progress-label').textContent = 'Preparing preview…';
+          document.getElementById('export-progress-value').textContent = '0%';
+          exportStatus.textContent = `Exporting ${timeLabel(end-start)} in real time. Keep Cutline open on this page.`;
+          const chunks = [];
+          recorder.addEventListener('dataavailable', event => { if (event.data && event.data.size) chunks.push(event.data); });
+          recorder.addEventListener('error', event => { console.warn('MediaRecorder error', event.error); exportStatus.textContent = 'Export stopped because the browser reported a recording error.'; });
+          recorder.addEventListener('stop', () => {
+            cancelAnimationFrame(exportAnimation); editorPlayer.pause(); musicPlayer.pause();
+            document.getElementById('preview-music').innerHTML = '<svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview';
+            if (tempAudioDestination) { try { audioGraph.videoGain.disconnect(tempAudioDestination); } catch (_) {} if (audioGraph.musicGain) { try { audioGraph.musicGain.disconnect(tempAudioDestination); } catch (_) {} } }
+            stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
+            isExporting = false; exportButton.disabled = false; exportProgress.hidden = true;
+            if (exportCancelled) { exportStatus.textContent = 'Export cancelled. Your source clip is unchanged.'; showToast('Export cancelled.'); return; }
+            const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' });
+            if (!blob.size) { exportStatus.textContent = 'The browser returned an empty export. Try a shorter clip or different browser.'; showToast('No video data was returned.'); return; }
+            createExportResult(blob, recorder.mimeType || mimeType || blob.type, warnings);
+            exportStatus.textContent = warnings.length ? 'Your clip is ready, but check the audio warning below.' : 'Your edited clip is ready. Preview it, then download or share it.';
+            showToast('Export complete. Check the file before posting.');
+          }, { once: true });
+          const paint = () => { if (!isExporting) return; drawEditorFrame(context, canvas.width, canvas.height); exportAnimation = requestAnimationFrame(paint); };
+          paint();
+          try {
+            await seekToFrame(editorPlayer, start);
+            if (exportCancelled) { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = 'Export cancelled before rendering began.'; showToast('Export cancelled.'); return; }
+            editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1;
+            if (musicObjectUrl) { musicPlayer.currentTime = 0; musicPlayer.loop = true; }
+            recorder.start(700);
+            if (musicObjectUrl) { try { await musicPlayer.play(); } catch (_) { warnings.push('The added audio could not play during export; it may be missing.'); } }
+            await editorPlayer.play();
+            document.getElementById('export-progress-label').textContent = 'Rendering…';
+            document.getElementById('cancel-export').hidden = false;
+          } catch (error) {
+            exportCancelled = true;
+            try { if (recorder.state !== 'inactive') recorder.stop(); } catch (_) {}
+            exportStatus.textContent = 'The browser could not play the source clip for export.';
+            if (!recorder.state || recorder.state === 'inactive') { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); }
+            showToast('Could not start playback for export. Try pressing play once, then export again.');
+          }
+        } catch (_) {
+          exportStatus.textContent = 'This browser could not prepare the export. Try a shorter clip or a different browser.';
+          showToast('The export could not be prepared.');
+        } finally {
+          exportPreparing = false;
+          if (!isExporting) exportButton.disabled = false;
         }
       }
       exportButton.addEventListener('click', startExport);
@@ -1758,7 +2115,7 @@
       document.querySelectorAll('[data-auth]').forEach(button => button.addEventListener('click', () => { authModal.hidden = false; document.getElementById('auth-email').focus(); }));
       document.getElementById('close-auth').addEventListener('click', () => { authModal.hidden = true; });
       authModal.addEventListener('click', event => { if (event.target === authModal) authModal.hidden = true; });
-      document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!authModal.hidden) authModal.hidden = true; if (!aiReviewModal.hidden) aiReviewModal.hidden = true; } });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!authModal.hidden) authModal.hidden = true; if (!aiReviewModal.hidden) aiReviewModal.hidden = true; if (!document.getElementById('coach-consent-modal').hidden) closeCoachConsent(); } });
       document.getElementById('auth-form').addEventListener('submit', event => { event.preventDefault(); if (!event.currentTarget.reportValidity()) return; document.getElementById('otp-step').hidden = false; showToast('Preview only: no email was sent.'); });
       document.getElementById('verify-preview').addEventListener('click', () => showToast('No account was created. Connect an auth provider to enable sign-in.'));
       document.getElementById('google-preview').addEventListener('click', () => showToast('Google sign-in is a preview only; OAuth is not connected.'));

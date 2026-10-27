@@ -6,6 +6,10 @@ const http = require('node:http');
 const { createHash, timingSafeEqual } = require('node:crypto');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
+const {
+  MAX_COACH_BODY_BYTES, normalizeCoachRequest, coachRequestPayload, parseCoachResponse,
+  researchRequestPayload, parseResearchResponse, arenaRequestPayload, parseArenaResponse,
+} = require('./coach');
 
 const indexFile = path.join(__dirname, 'index.html');
 const DEFAULT_MODEL = 'gemini-3.8-flash';
@@ -13,7 +17,9 @@ const DEFAULT_MODEL = 'gemini-3.8-flash';
 // Gemini's recommended 20 MB total request size for short video inputs.
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
 const REVIEW_COOLDOWN_MS = 30_000;
+const COACH_COOLDOWN_MS = 5_000;
 const PROVIDER_TIMEOUT_MS = 120_000;
+const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024;
 const AUTH_WINDOW_MS = 60_000;
 const MAX_AUTH_FAILURES = 5;
 const ACCESS_USERNAME = 'cutline';
@@ -37,10 +43,17 @@ function configuration(env) {
     ? createHash('sha256').update(`${ACCESS_USERNAME}:${password}`, 'utf8').digest()
     : null;
   const aiRequested = env.CUTLINE_AI_ENABLED === 'true' && apiKey.length > 0;
+  const ready = aiRequested && passwordValid;
+  const arenaKey = String(env.ARENA_API_KEY || '').trim();
+  const requestedArenaModel = String(env.ARENA_MODEL || '').trim();
+  const arenaModel = /^[a-zA-Z0-9._:/-]{1,160}$/.test(requestedArenaModel) ? requestedArenaModel : '';
   return {
-    model, apiKey, passwordProvided, passwordValid, accessDigest, aiRequested,
-    // A flag and key alone can never expose a billable public AI endpoint.
-    ready: aiRequested && passwordValid,
+    model, apiKey, passwordProvided, passwordValid, accessDigest, aiRequested, ready,
+    // Optional billable features need both owner configuration and an explicit
+    // per-request choice. Neither provider is contacted just by enabling them.
+    researchReady: ready && env.CUTLINE_RESEARCH_ENABLED === 'true',
+    arenaReady: ready && env.CUTLINE_ARENA_ENABLED === 'true' && Boolean(arenaKey && arenaModel),
+    arenaKey, arenaModel,
   };
 }
 
@@ -101,7 +114,7 @@ function uploadError(statusCode, message) {
   return error;
 }
 
-function readLimitedBody(req, maxBytes) {
+function readLimitedBody(req, maxBytes, messages = {}) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let chunks = [];
@@ -118,14 +131,14 @@ function readLimitedBody(req, maxBytes) {
       if (settled) return;
       size += chunk.length;
       if (size > maxBytes) {
-        fail(uploadError(413, 'For AI review, choose a video no larger than 14 MB.'));
+        fail(uploadError(413, messages.tooLarge || 'For AI review, choose a video no larger than 14 MB.'));
       } else {
         chunks.push(chunk);
       }
     });
     req.once('end', () => {
       if (settled) return;
-      if (!size) return fail(uploadError(400, 'The uploaded video was empty.'));
+      if (!size) return fail(uploadError(400, messages.empty || 'The uploaded video was empty.'));
       settled = true;
       resolve(Buffer.concat(chunks, size));
     });
@@ -137,8 +150,10 @@ function readLimitedBody(req, maxBytes) {
 function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
   const config = configuration(env);
   const reviewTimes = new Map();
+  const coachTimes = new Map();
   const failedLogins = new Map();
   let reviewInFlight = false;
+  let coachInFlight = false;
 
   function authorize(req, res) {
     if (!config.passwordProvided) return true;
@@ -304,6 +319,139 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
     }
   }
 
+  async function readProviderJson(response) {
+    const length = Number(response.headers?.get?.('content-length') || 0);
+    if (length > MAX_PROVIDER_RESPONSE_BYTES) throw new Error('Provider response too large');
+    // A capped stream avoids retaining an unexpectedly large provider response.
+    if (response.body && typeof response.body.getReader === 'function') {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > MAX_PROVIDER_RESPONSE_BYTES) {
+            await reader.cancel();
+            throw new Error('Provider response too large');
+          }
+          chunks.push(Buffer.from(value));
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      return JSON.parse(Buffer.concat(chunks, size).toString('utf8'));
+    }
+    // Also supports simple mock providers in tests.
+    return response.json();
+  }
+
+  async function callProvider(url, headers, payload, res) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+    const abortIfDisconnected = () => { if (!res.writableEnded) controller.abort(); };
+    res.once('close', abortIfDisconnected);
+    try {
+      const upstream = await fetchImpl(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(payload), signal: controller.signal,
+      });
+      if (!upstream.ok) {
+        const error = new Error('AI provider rejected the request');
+        error.providerStatus = upstream.status;
+        if (upstream.body && typeof upstream.body.cancel === 'function') await upstream.body.cancel().catch(() => {});
+        throw error;
+      }
+      return await readProviderJson(upstream);
+    } finally {
+      clearTimeout(timeout);
+      res.off('close', abortIfDisconnected);
+    }
+  }
+
+  function providerFailure(error, feature) {
+    if (error.name === 'AbortError') return `${feature} took too long or was canceled. Try again later.`;
+    if (error.providerStatus === 429) return `${feature} hit a provider rate limit or quota. Wait or check the provider account.`;
+    return `${feature} could not be completed. Check the provider key, model, account access and server settings.`;
+  }
+
+  async function coach(req, res) {
+    if (!config.ready) return rejectRequest(req, res, 503, 'AI Coach is not configured on this server. Nothing was sent.');
+    if (!originMatchesRequest(req)) return rejectRequest(req, res, 403, 'This request did not come from the Cutline page. Nothing was sent.');
+    if (req.headers['x-coach-consent'] !== 'yes') return rejectRequest(req, res, 400, 'Confirm the Coach privacy notice before sending.');
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (contentType !== 'application/json') return rejectRequest(req, res, 415, 'Coach requests must use JSON.');
+    if (Number(req.headers['content-length'] || 0) > MAX_COACH_BODY_BYTES) {
+      return rejectRequest(req, res, 413, 'This Coach request is too large.', { Connection: 'close' });
+    }
+    if (coachInFlight) return rejectRequest(req, res, 429, 'Another Coach request is in progress. Please wait.');
+    coachInFlight = true;
+    try {
+      const bytes = await readLimitedBody(req, MAX_COACH_BODY_BYTES, { tooLarge: 'This Coach request is too large.', empty: 'Enter a message for the Coach.' });
+      let input;
+      try { input = JSON.parse(bytes.toString('utf8')); } catch (_) { return sendJson(res, 400, { error: 'The Coach request was not valid JSON.' }); }
+      let request;
+      try { request = normalizeCoachRequest(input); } catch (error) { return sendJson(res, 400, { error: error.message }); }
+      if (request.research && !config.researchReady) return sendJson(res, 403, { error: 'Live Google Search research is not enabled by the owner. No request was sent.' });
+      if (request.arena && !config.arenaReady) return sendJson(res, 403, { error: 'Arena creative polish is not configured by the owner. No request was sent.' });
+
+      const address = req.socket.remoteAddress || 'unknown';
+      const time = now();
+      const previous = coachTimes.get(address);
+      if (previous !== undefined && time >= previous && time - previous < COACH_COOLDOWN_MS) {
+        const retryAfter = Math.max(1, Math.ceil((COACH_COOLDOWN_MS - (time - previous)) / 1000));
+        return sendJson(res, 429, { error: `Please wait ${retryAfter} seconds before another Coach request.` }, { 'Retry-After': retryAfter });
+      }
+      if (coachTimes.size >= 500) {
+        for (const [ip, last] of coachTimes) if (time - last > COACH_COOLDOWN_MS * 4 || time < last) coachTimes.delete(ip);
+        if (coachTimes.size >= 1000) coachTimes.delete(coachTimes.keys().next().value);
+      }
+      coachTimes.set(address, time);
+
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
+      let data;
+      try {
+        data = await callProvider(geminiUrl, { 'x-goog-api-key': config.apiKey }, coachRequestPayload(request), res);
+      } catch (error) {
+        if (res.destroyed || res.writableEnded) return;
+        const status = error.name === 'AbortError' ? 504 : (error.providerStatus === 429 ? 429 : 502);
+        return sendJson(res, status, { error: providerFailure(error, 'Gemini Coach') });
+      }
+      const result = parseCoachResponse(data, Boolean(request.youtubeUrl));
+      if (!result) return sendJson(res, 502, { error: 'Gemini returned no readable answer. The video may be unavailable, unsupported or blocked.' });
+      const output = { ...result, youtubeUrl: request.youtubeUrl, model: config.model };
+
+      if (request.research && !res.destroyed) {
+        try {
+          const researchData = await callProvider(geminiUrl, { 'x-goog-api-key': config.apiKey }, researchRequestPayload(request, result.answer), res);
+          output.research = parseResearchResponse(researchData);
+          if (!output.research) output.researchError = 'Google Search returned no usable research. The ideas above are not live-researched.';
+        } catch (error) {
+          output.researchError = providerFailure(error, 'Google Search research');
+        }
+      }
+      if (request.arena && !res.destroyed) {
+        try {
+          const arenaData = await callProvider('https://api.arena.ai/v1/chat/completions', { Authorization: `Bearer ${config.arenaKey}` }, arenaRequestPayload(request, result.answer, config.arenaModel), res);
+          output.arena = parseArenaResponse(arenaData);
+          if (!output.arena) output.arenaError = 'Arena returned no readable creative polish.';
+        } catch (error) {
+          output.arenaError = providerFailure(error, 'Arena creative polish');
+        }
+      }
+      return sendJson(res, 200, output);
+    } catch (error) {
+      if (res.destroyed || res.writableEnded) return;
+      if (error.statusCode) return sendJson(res, error.statusCode, { error: error.message }, error.statusCode === 413 ? { Connection: 'close' } : undefined);
+      // Never log prompts, links, provider responses, credentials or media.
+      console.error('Coach request failed due to a network or server error.');
+      return sendJson(res, 502, { error: 'The Coach request could not be completed.' });
+    } finally {
+      coachInFlight = false;
+    }
+  }
+
   const server = http.createServer(async (req, res) => {
     // Clients can disconnect while a rejected request is being drained.
     req.on('error', () => {});
@@ -331,6 +479,9 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       req.resume();
       return sendJson(res, 200, {
         videoReviewReady: config.ready,
+        coachReady: config.ready,
+        researchReady: config.researchReady,
+        arenaReady: config.arenaReady,
         model: config.model,
         maxVideoBytes: MAX_VIDEO_BYTES,
         message: config.ready
@@ -342,6 +493,11 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
     if (pathname === '/api/video-review') {
       if (req.method !== 'POST') return methodNotAllowed(req, res, ['POST']);
       return reviewVideo(req, res);
+    }
+
+    if (pathname === '/api/coach') {
+      if (req.method !== 'POST') return methodNotAllowed(req, res, ['POST']);
+      return coach(req, res);
     }
 
     if (pathname === '/favicon.ico' && isRead) {
@@ -373,7 +529,7 @@ if (require.main === module) {
       const address = server.address();
       const config = configuration(process.env);
       const access = config.passwordValid ? 'protected' : (config.passwordProvided ? 'blocked (invalid password)' : 'unprotected');
-      console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}.`);
+      console.log(`Cutline Studio is listening on ${host}:${address.port}; access ${access}; video AI ${config.ready ? 'configured' : 'off'}; Coach ${config.ready ? 'configured' : 'off'}.`);
       if (config.passwordProvided && !config.passwordValid) {
         console.warn('Access password is invalid; all requests are blocked. Use a unique password of 16–256 characters.');
       }
