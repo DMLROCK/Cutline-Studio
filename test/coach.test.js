@@ -359,6 +359,26 @@ test('provider errors offer safe setup guidance without returning upstream diagn
   }
 });
 
+test('Arena authorization failures explain app access without leaking provider details', async t => {
+  const arenaEnv = { CUTLINE_ACCESS_PASSWORD:PASSWORD, CUTLINE_ARENA_ENABLED:'true', ARENA_API_KEY:ARENA_KEY, ARENA_MODEL:'approved/model' };
+  for (const status of [401, 403]) {
+    const base = await start(t, { env:arenaEnv, fetchImpl:async () => new Response('private upstream diagnostic', {status}) });
+    const response = await request(base, {prompt:'Give me ideas', engine:'arena'});
+    assert.equal(response.status, 502);
+    const body = await response.text();
+    assert.match(body, /workspace API access/i);
+    assert.match(body, /Claude Code/i);
+    assert.doesNotMatch(body, /private upstream diagnostic|test-only-arena-key/);
+  }
+  const base = await start(t, { env:{...ENV, ...arenaEnv}, fetchImpl:async url => url.includes('arena.ai') ? new Response('private upstream diagnostic', {status:403}) : google() });
+  const response = await request(base, {prompt:'Give me ideas', arena:true});
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.match(result.answer, /summary/i);
+  assert.match(result.arenaError, /workspace API access/i);
+  assert.doesNotMatch(JSON.stringify(result), /private upstream diagnostic|test-only-arena-key/);
+});
+
 test('a truncated Gemini response is reported without exposing partial output', async t => {
   const base = await start(t, { fetchImpl:async () => new Response(JSON.stringify({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'private partial result'}]}}]}),{status:200}) });
   const response = await request(base);

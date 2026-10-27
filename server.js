@@ -376,6 +376,7 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
   function providerFailure(error, feature) {
     if (error.name === 'AbortError') return `${feature} took too long or was canceled. Try again later.`;
     if (error.providerStatus === 429) return `${feature} hit a provider rate limit or quota. Wait or check the provider account.`;
+    if ((error.providerStatus === 401 || error.providerStatus === 403) && feature.startsWith('Arena')) return `${feature} was not authorized. Check the Arena key, workspace API access and enabled model. Free coding-router keys may be limited to Claude Code.`;
     if (error.providerStatus === 401 || error.providerStatus === 403) return `${feature} was not authorized. Check the server's provider key, account access and enabled model.`;
     if (error.providerStatus === 404) return `${feature} could not find the configured provider model. Check the model name and account access.`;
     if (error.providerStatus === 400 && feature === 'Gemini Coach') return 'Gemini rejected this request. Check that the video is public and the model supports it; if using fast-action focus, turn it off and try again.';

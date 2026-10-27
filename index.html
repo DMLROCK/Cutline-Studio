@@ -742,15 +742,16 @@
                 <span class="offline-badge" id="coach-ai-badge">AI CHECKING</span>
               </div>
               <section class="coach-setup" id="coach-setup" style="margin:12px 15px 0" hidden aria-label="AI setup">
-                <strong>Connect your AI Coach</strong>
+                <strong id="coach-setup-title">Connect your AI Coach</strong>
                 <p id="coach-setup-message">AI is not connected yet.</p>
                 <details><summary>What is needed?</summary>
                   <ol>
-                    <li>Run the Node version of Cutline on a private HTTPS host.</li>
-                    <li>In the host’s secret settings, add <code>CUTLINE_ACCESS_PASSWORD</code>, <code>GEMINI_API_KEY</code>, and <code>CUTLINE_AI_ENABLED=true</code>.</li>
+                    <li>Run the Node app on a private HTTPS host and set <code>CUTLINE_ACCESS_PASSWORD</code>. Verify the login first.</li>
+                    <li>For Arena text coaching, set <code>ARENA_API_KEY</code>, <code>ARENA_MODEL</code>, and <code>CUTLINE_ARENA_ENABLED=true</code>. Your Arena workspace must permit API use by this app.</li>
+                    <li>For video analysis, also set <code>GEMINI_API_KEY</code> and <code>CUTLINE_AI_ENABLED=true</code>. The current Arena integration does not watch videos.</li>
                     <li>Open the hosted app and tap <b>Test selected AI</b>. Configuration alone is not a live test.</li>
                   </ol>
-                  <p>Never put your key in this page, GitHub, screenshots, or chat. Google’s quota and possible charges apply.</p>
+                  <p>Never put keys in this page, GitHub, screenshots, or chat. Providers have separate terms, quotas and possible charges.</p>
                 </details>
               </section>
               <div class="messages" id="chat-messages" aria-live="polite"></div>
@@ -781,13 +782,13 @@
                   </div>
                 </div>
                 <div class="coach-options">
-                  <label for="coach-engine"><span>AI engine</span><select class="select-field" id="coach-engine" aria-label="Choose AI engine"><option value="gemini">Gemini · video + text</option><option value="arena">Arena · text only</option></select></label>
+                  <label for="coach-engine"><span>AI engine</span><select class="select-field" id="coach-engine" aria-label="Choose AI engine"><option value="arena">Arena · text only</option><option value="gemini">Gemini · video + text</option></select></label>
                   <label><input type="checkbox" id="coach-research" disabled><span>Google Search research <b>(optional; may cost extra)</b></span></label>
                   <label><input type="checkbox" id="coach-arena" disabled><span>Arena creative director + edit recipe <b>(optional; separate access and costs)</b></span></label>
                 </div>
                 <p class="chat-disclaimer" id="coach-options-status">Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.</p>
-                <p class="chat-disclaimer" id="coach-engine-note">Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.</p>
-                <div class="mini-actions"><button class="button small" id="coach-test" type="button" disabled>Test selected AI</button><button class="button small" id="coach-cancel" type="button" hidden>Cancel request</button></div>
+                <p class="chat-disclaimer" id="coach-engine-note">Arena is text-only in this app. Gemini can analyze a public YouTube link if configured; the video is not downloaded.</p>
+                <div class="mini-actions"><button class="button small" id="coach-arena-video" type="button" hidden>Use Arena + Gemini for a video</button><button class="button small" id="coach-test" type="button" disabled>Test selected AI</button><button class="button small" id="coach-cancel" type="button" hidden>Cancel request</button></div>
                 <p class="chat-disclaimer" id="coach-test-status" role="status">Configuration status does not test a live connection.</p>
               </form>
             </section>
@@ -1199,6 +1200,7 @@
         document.getElementById('coach-cancel').hidden = !sending;
         const selected = document.getElementById('coach-engine').value;
         document.getElementById('coach-test').disabled = sending || (selected === 'arena' ? !aiConnection.arenaReady : !aiConnection.coachReady);
+        document.getElementById('coach-arena-video').disabled = sending;
       }
       function closeCoachConsent() {
         document.getElementById('coach-consent-modal').hidden = true;
@@ -1856,7 +1858,7 @@
         const arenaOnly = engine.value === 'arena';
         document.getElementById('coach-video-url').disabled = arenaOnly;
         document.getElementById('coach-test').disabled = coachInFlight || (arenaOnly ? !aiConnection.arenaReady : !aiConnection.coachReady);
-        const badge = aiConnection.coachReady ? 'GEMINI CONFIGURED' : (aiConnection.arenaReady ? 'ARENA TEXT CONFIGURED' : 'AI SETUP NEEDED');
+        const badge = arenaOnly && aiConnection.arenaReady ? 'ARENA TEXT CONFIGURED' : (!arenaOnly && aiConnection.coachReady ? 'GEMINI CONFIGURED' : 'AI SETUP NEEDED');
         document.getElementById('coach-ai-badge').textContent = badge;
         document.getElementById('starter-ai-badge').textContent = badge;
         const research = document.getElementById('coach-research');
@@ -1869,10 +1871,18 @@
         if (arena.disabled) arena.checked = false;
         if (focus.disabled) focus.checked = false;
         document.getElementById('coach-focus-fields').hidden = !focus.checked;
-        document.getElementById('coach-setup').hidden = aiConnection.coachReady;
-        document.getElementById('coach-setup-message').textContent = aiServiceReachable
-          ? 'This app can reach its server, but Gemini is not configured. Arena, if available, is text only and cannot analyze YouTube video.'
-          : 'No AI server could be reached. The browser-only preview cannot run AI; open a securely hosted Node version to use Gemini.';
+        const useBoth = document.getElementById('coach-arena-video');
+        useBoth.hidden = !arenaOnly || !aiConnection.coachReady || !aiConnection.arenaReady;
+        useBoth.disabled = coachInFlight;
+        document.getElementById('coach-setup').hidden = aiConnection.coachReady && aiConnection.arenaReady;
+        document.getElementById('coach-setup-title').textContent = aiConnection.arenaReady ? 'Connect video AI (optional)' : (aiConnection.coachReady ? 'Connect Arena (optional)' : 'Connect your AI Coach');
+        document.getElementById('coach-setup-message').textContent = !aiServiceReachable
+          ? 'No AI server could be reached. The browser-only preview cannot run AI; open a securely hosted Node version.'
+          : (!aiConnection.arenaReady && !aiConnection.coachReady
+            ? 'No AI is configured on this server. Connect Arena for text coaching or Gemini for video analysis.'
+            : (aiConnection.arenaReady
+              ? 'Arena is configured for text, not video. Connect Gemini too if you want to analyze a YouTube link.'
+              : 'Gemini is configured. Connect Arena separately if you want it as your creative coach.'));
         const available = [];
         if (aiConnection.researchReady) available.push('Google Search');
         if (aiConnection.arenaReady) available.push('Arena');
@@ -1880,10 +1890,17 @@
           ? 'Arena receives text only, not video. It cannot inspect a YouTube link or verify current trends. Provider access and costs apply.'
           : (available.length ? `${available.join(' and ')} configured, not connection-tested. Select only if you accept possible provider charges.` : 'Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.');
         document.getElementById('coach-engine-note').textContent = arenaOnly
-          ? 'Arena sees your text and recent conversation, not the video or current web trends. Switch to Gemini to analyze a public YouTube link.'
-          : 'Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.';
+          ? 'Arena sees your text and recent conversation, not the video or current web trends. Connect Gemini for YouTube analysis, then choose Arena + Gemini below.'
+          : 'Gemini can analyze public YouTube links after confirmation. Check Arena creative director if you also want Arena’s text ideas. Both providers may charge separately. The video is not downloaded.';
       }
       document.getElementById('coach-engine').addEventListener('change', updateCoachConnection);
+      document.getElementById('coach-arena-video').addEventListener('click', () => {
+        if (coachInFlight || !aiConnection.coachReady || !aiConnection.arenaReady) return;
+        document.getElementById('coach-engine').value = 'gemini'; updateCoachConnection();
+        document.getElementById('coach-arena').checked = true;
+        document.getElementById('coach-video-url').focus();
+        showToast('Arena + Gemini selected. Add a YouTube link and review the confirmation before sending.');
+      });
       document.getElementById('coach-focus').addEventListener('change', event => { document.getElementById('coach-focus-fields').hidden = !event.target.checked; });
       document.getElementById('clear-coach-video').addEventListener('click', () => { document.getElementById('coach-video-url').value=''; showToast('Video attachment cleared.'); });
       document.getElementById('coach-cancel').addEventListener('click', () => { if (coachAbortController) coachAbortController.abort(); });

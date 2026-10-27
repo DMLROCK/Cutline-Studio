@@ -29,7 +29,7 @@ npm start
 
 Open `http://localhost:4173`. The server honors `PORT` (default `4173`) and `HOST` (default `0.0.0.0`); for a local-only process, set `HOST=127.0.0.1`. Run the automated server and timeline tests with `npm test`.
 
-An optional real-browser smoke test is in `scripts/browser-smoke.cjs`. It needs a separately installed `puppeteer-core`, Chromium/Chrome and an `ffmpeg` build with `lavfi`, `libvpx-vp9` and `libopus`; these are test tools, not production dependencies. For example, after installing `puppeteer-core` outside this checkout, set `NODE_PATH` to that installation's `node_modules`, `CHROME_PATH` to your browser executable, and `FFMPEG_PATH` to your ffmpeg executable, then run `node scripts/browser-smoke.cjs`. The test synthesizes media in a temporary directory, uses a mocked AI provider, checks project handling and measures the colors and audio frequencies of an actual multi-cut export. It does not verify a real phone or provider.
+Optional real-browser smoke tests are in `scripts/browser-smoke.cjs` and `scripts/arena-coach-smoke.cjs`. Both need a separately installed `puppeteer-core` and Chromium/Chrome; these are test tools, not production dependencies. Set `NODE_PATH` to that installation's `node_modules` and `CHROME_PATH` to the browser executable. The first test also needs an `ffmpeg` build with `lavfi`, `libvpx-vp9` and `libopus` (set `FFMPEG_PATH`); it synthesizes media and measures a multi-cut export. The Arena test checks provider selection, explicit consent and mobile layout. Run them with `node scripts/browser-smoke.cjs` and `node scripts/arena-coach-smoke.cjs`. Both use mocked providers and do not verify a real phone or live API.
 
 Without an access password the local app is open to anyone who can reach it, and all AI routes remain **off**. Do not expose an unprotected personal preview to the internet.
 
@@ -37,18 +37,23 @@ Without an access password the local app is open to anyone who can reach it, and
 
 For a quick look when the live sandbox is unavailable, the public branch can be opened through the third-party [HTML Preview service](https://htmlpreview.github.io/?https://github.com/DMLROCK/Cutline-Studio/blob/arena/ae97be88-cutline-studio/index.html). This is not the hosted Node app: AI, research, TikTok and server APIs are unavailable. It can load the browser editor, but codec/export support depends on the device and service. Because the page is delivered through a third party that controls its own code, do not enter secrets or use confidential media there; use a non-sensitive test clip. For actual AI, deploy the private Node app below.
 
-## Set up a private hosted preview and Gemini
+## Set up a private hosted preview and AI
 
 Import the **`arena/ae97be88-cutline-studio` branch** as a Node service on a host that supports Node 20+, HTTPS, runtime secrets, and a long-running web process. Set the start command to `npm start` and configure the host's assigned `PORT` if it doesn't set one automatically. GitHub stores the code; it is not itself an always-on hosting service.
 
-In the hosting provider's **runtime environment variables / secrets** (not in a repository file, browser page, screenshot or chat), set:
+In the hosting provider's **runtime environment variables / secrets** (not in a repository file, browser page, screenshot or chat), first set the password and verify the login, then add the providers you want:
 
 | Variable | Value / purpose |
 | --- | --- |
 | `CUTLINE_ACCESS_PASSWORD` | A unique random **16–256 character** private password. Mark it secret. |
-| `GEMINI_API_KEY` | Your Google Gemini API key. Mark it secret. Obtain/manage one at [Google AI Studio API keys](https://aistudio.google.com/apikey); never paste it into chat or GitHub. |
-| `CUTLINE_AI_ENABLED` | `true` to enable Coach and confirmed per-clip AI review. |
+| `ARENA_API_KEY` | Your Arena API key, permitted for use by this application. Mark it secret. Manage keys at [Arena API keys](https://platform.arena.ai/dashboard/keys). |
+| `ARENA_MODEL` | Exact model identifier enabled for the key in your Arena workspace. |
+| `CUTLINE_ARENA_ENABLED` | `true` to enable Arena text coaching. |
+| `GEMINI_API_KEY` | For video analysis, your Google Gemini API key. Mark it secret. Obtain/manage one at [Google AI Studio API keys](https://aistudio.google.com/apikey). |
+| `CUTLINE_AI_ENABLED` | `true` to enable Gemini Coach and confirmed per-clip AI review. |
 | `GEMINI_MODEL` | Optional; defaults to `gemini-3.8-flash`. Use a model your Google project can access that supports video. |
+
+Arena's app-authorized API access and eligible models depend on the account/workspace. Arena states that **free-router keys work in the Claude Code app only**; do not assume a free coding-router key or ordinary Arena chat access works in Cutline. Review access, quotas, terms and possible charges before use.
 
 The server reads these at startup and does **not** load `.env` files automatically. Restart/redeploy after changes. Open the HTTPS address in a private browser window and verify the login prompt **before** adding or enabling an API key. Username: `cutline`; password: your private `CUTLINE_ACCESS_PASSWORD`. If a password variable is present but invalid or empty, all routes fail closed. If it is absent, the app opens without a login and AI remains disabled.
 
@@ -63,8 +68,9 @@ Suga's documentation describes the following setup, but the existing service's b
 1. Open the project and select the existing `cutline-studio` service. In **Config**, check its GitHub repository is `DMLROCK/Cutline-Studio` and its watched branch is `arena/ae97be88-cutline-studio`. The Node start command is `npm start`; Node 20 or newer is required.
 2. In **Config → Public Networking**, add or check the **Generated URL** HTTPS endpoint. Set its target port to `4173`. In **Env Vars → Edit environment variables**, set `PORT` to `4173` and add `CUTLINE_ACCESS_PASSWORD` with a unique random password of 16–256 characters. Mark the password **Sensitive** before saving. **Save**, then **Apply** the environment changes.
 3. Open the generated HTTPS URL in a private browser window. It should ask for username `cutline` and your password. If it does not ask, stop: verify the deployment, branch and protection before adding a key.
-4. Return to **Env Vars → Edit environment variables**. Add `GEMINI_API_KEY` using your own key and mark it **Sensitive**; add `CUTLINE_AI_ENABLED` with the value `true`. Save, then **Apply**. Never put the key in source code, the static preview, chat, or a screenshot.
-5. Open the Suga URL again, sign in, go to **Coach**, and tap **Test selected AI**. Confirm the text-only test; then try a separate public YouTube link. Watch for provider errors or quota limits. A text test alone does not prove video analysis works.
+4. In your [Arena API workspace](https://platform.arena.ai/dashboard/keys), check that it permits API use by Cutline and identify an enabled model. Return to **Env Vars → Edit environment variables**. Add `ARENA_API_KEY` using your own key and mark it **Sensitive**; add `ARENA_MODEL` with the permitted model ID and `CUTLINE_ARENA_ENABLED` with the value `true`. Save, then **Apply**. Never put keys in source code, the static preview, chat, or a screenshot.
+5. Open the Suga URL again, sign in, go to **Coach**, and tap **Test selected AI** with **Arena · text only** selected. Confirm the text-only test and watch for provider errors or quota limits. This does not test video analysis.
+6. For YouTube analysis, optionally return to Suga's environment settings, add a **Sensitive** `GEMINI_API_KEY` and `CUTLINE_AI_ENABLED=true`, then Save and Apply. In Coach, choose **Use Arena + Gemini for a video**, paste a public link and review the confirmation. Gemini examines the video; Arena receives Gemini's text and supplies creative direction. Providers can charge separately.
 
 Provider screens and plans can change; this workflow, real Gemini calls, Suga's request limits, memory needs, and Hetrix behavior have not been tested on that service. A small memory allocation may not support the separate 14 MiB upload-review route.
 
@@ -74,7 +80,7 @@ Search is **off by default**. Google's Gemini API Search grounding is a paid ser
 
 To make the checkbox available, set `CUTLINE_RESEARCH_ENABLED=true` on the protected, Gemini-enabled server and restart it. The checkbox starts unchecked; selecting it and confirming the request explicitly adds a **second** Gemini call for research. The result displays provider-returned sources and citations, plus Google's required Search Suggestions when supplied. They are retained only in the current tab, not long-term chat storage; after reload the user must run research again. For safety, unrecognized or unsafe suggestion HTML causes the research result to be withheld rather than executed or displayed without its required suggestions. No actual paid Search request has been verified by this repository's mock tests. A source link does not mean every claim is verified or that a title or sound is currently trending.
 
-## Optional Arena creative director
+## Arena text coach and creative director
 
 YouTube video analysis uses Gemini. Arena is **not automatically connected** to this Agent Mode session or its credentials. If you have separately authorized access to Arena's developer API and a compatible model, you can optionally set these runtime values on the same protected server. Gemini is optional for standalone Arena text chat, but is required for YouTube video analysis and Google Search research:
 
@@ -82,7 +88,7 @@ YouTube video analysis uses Gemini. Arena is **not automatically connected** to 
 - `ARENA_API_KEY` — a separate runtime secret; never put it in code or chat.
 - `ARENA_MODEL` — the model identifier your Arena developer workspace explicitly permits.
 
-In AI Coach, choose **Arena · text only** for a standalone Arena conversation (no Gemini call), or select Gemini mode and check **Arena creative director + edit recipe** to add an Arena call after Gemini. Each request needs confirmation. Arena receives the current message and up to six recent chat messages; in the Gemini-plus-Arena mode it also receives Gemini's text answer, via `https://api.arena.ai/v1/chat/completions`. Ask it for a storyboard, hook, caption package, sound direction or edit ideas. It can also suggest a limited recipe using controls this editor actually has; you review the proposed settings and explicitly choose whether to apply them. If the model does not return a valid recipe, the text can still be shown. Arena receives **text only**; it does not independently watch the video, hear audio, fetch TikTok sounds or research trends. Separate access restrictions, quotas, terms and possible costs apply; some Arena routers are limited to particular developer clients. Configuration is not a successful connection test, and the adapter has only been tested with a mock provider.
+In AI Coach, **Arena · text only** is selected by default when Arena is configured (no Gemini call). When both providers are configured, choose **Use Arena + Gemini for a video**, or select Gemini mode and check **Arena creative director + edit recipe**, to add an Arena call after Gemini. The second provider is never enabled automatically. Each request needs confirmation. Arena receives the current message and up to six recent chat messages; in the Gemini-plus-Arena mode it also receives Gemini's text answer, via `https://api.arena.ai/v1/chat/completions`. Ask it for a storyboard, hook, caption package, sound direction or edit ideas. It can also suggest a limited recipe using controls this editor actually has; you review the proposed settings and explicitly choose whether to apply them. If the model does not return a valid recipe, the text can still be shown. Arena receives **text only**; it does not independently watch the video, hear audio, fetch TikTok sounds or research trends. Separate access restrictions, quotas, terms and possible costs apply; some Arena routers are limited to particular developer clients. Configuration is not a successful connection test, and the adapter has only been tested with a mock provider.
 
 ## Optional TikTok creator profile and shared stats
 
