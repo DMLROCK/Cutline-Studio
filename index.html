@@ -341,7 +341,24 @@
     .stage-subcaption { position: absolute; left: 8%; right: 8%; bottom: 7%; z-index: 2; color: #fff; text-align: center; text-shadow: 0 2px 5px #000; font-size: 12px; font-weight: 750; line-height: 1.3; pointer-events: none; overflow-wrap: anywhere; }
     .scrub-range, .control-range { width: 100%; height: 19px; margin: 0; accent-color: var(--lime); cursor: pointer; }
     .scrub-range { display: block; margin: 7px 0 11px; }
+    .editor-shortcuts { display:flex; flex-wrap:wrap; gap:7px; margin:0 0 14px; }
+    .editor-shortcuts button { min-height:34px; padding:7px 11px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface); font-size:10px; font-weight:750; cursor:pointer; }
+    .editor-shortcuts button:hover { color:var(--lime); border-color:var(--line-strong); }
     .timeline-lanes { display: grid; gap: 6px; }
+    .cut-strip { position:absolute; inset:3px; display:flex; gap:2px; }
+    .cut-strip button { flex:1 1 0; min-width:0; border:1px solid rgba(200,242,118,.35); border-radius:4px; overflow:hidden; color:var(--ink); background:rgba(200,242,118,.16); font-size:8px; cursor:pointer; }
+    .cut-strip button.active { background:rgba(200,242,118,.38); border-color:var(--lime); }
+    .cut-list { display:grid; gap:7px; margin-top:12px; }
+    .cut-row { display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
+    .cut-row.active { border-color:rgba(200,242,118,.55); }
+    .cut-select { flex:1; min-width:0; border:0; padding:3px; text-align:left; color:var(--ink); background:none; cursor:pointer; }
+    .cut-select strong,.cut-select small { display:block; overflow-wrap:anywhere; }
+    .cut-select strong { font-size:10px; } .cut-select small { margin-top:2px; color:var(--muted); font-size:9px; }
+    .cut-actions { display:flex; flex-wrap:wrap; gap:4px; }
+    .cut-actions button { min-width:31px; min-height:31px; border:1px solid var(--line); border-radius:7px; color:var(--ink); background:var(--surface); cursor:pointer; }
+    .cut-actions button:disabled { opacity:.35; cursor:not-allowed; }
+    .project-actions { display:flex; gap:7px; flex-wrap:wrap; margin-top:11px; }
+    .project-notice { margin-top:9px; color:var(--muted); font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
     .timeline-lane { display: grid; grid-template-columns: 43px minmax(0,1fr); align-items: center; gap: 7px; }
     .timeline-lane > span { color: var(--muted); font-size: 8px; font-weight: 850; letter-spacing: .08em; }
     .timeline-lane .timeline-track { height: 22px; }
@@ -508,6 +525,7 @@
       .library-row .button { margin-left: 48px; }
       .toast { bottom: 77px; }
     }
+    @media (max-width: 360px) { .topbar .prototype-pill { display:none; } }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
@@ -560,7 +578,7 @@
       <div class="side-footer">
         <div class="avatar">CL</div>
         <div class="side-user"><strong>Creator workspace</strong><span>Local preview</span></div>
-        <button class="side-signin" data-auth>Sign in</button>
+        <button class="side-signin" data-go="profile">Profile</button>
       </div>
     </aside>
 
@@ -729,6 +747,9 @@
                     <button class="button primary small" id="coach-send" type="submit">Send <svg class="icon icon-sm"><use href="#i-arrow"></use></svg></button>
                   </div>
                 </div>
+                <label class="field-label" for="coach-video-url">OPTIONAL YOUTUBE LINK · ATTACHED TO EACH GEMINI REQUEST</label>
+                <div class="link-form"><input class="text-field" id="coach-video-url" type="url" maxlength="2048" placeholder="https://youtube.com/watch?v=…"><button class="button small" id="clear-coach-video" type="button">Clear</button></div>
+                <p class="chat-disclaimer">Use this for follow-up questions about the same video. It stays in this tab until cleared and is sent again with each confirmed Gemini request; repeated analysis may use quota or incur costs.</p>
                 <div class="coach-options">
                   <label for="coach-engine"><span>AI engine</span><select class="select-field" id="coach-engine" aria-label="Choose AI engine"><option value="gemini">Gemini · video + text</option><option value="arena">Arena · text only</option></select></label>
                   <label><input type="checkbox" id="coach-research" disabled><span>Google Search research <b>(optional; may cost extra)</b></span></label>
@@ -736,6 +757,8 @@
                 </div>
                 <p class="chat-disclaimer" id="coach-options-status">Live research and Arena require separate owner setup. Unresearched titles and hashtags are ideas, not verified trends.</p>
                 <p class="chat-disclaimer" id="coach-engine-note">Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.</p>
+                <div class="mini-actions"><button class="button small" id="coach-test" type="button" disabled>Test selected AI</button><button class="button small" id="coach-cancel" type="button" hidden>Cancel request</button></div>
+                <p class="chat-disclaimer" id="coach-test-status" role="status">Configuration status does not test a live connection.</p>
               </form>
             </section>
             <aside class="coach-side">
@@ -835,6 +858,7 @@
             <div><div class="eyebrow"><span class="mini-line"></span> CUTTING DESK · LOCAL EDITOR</div><h1 id="editor-title">Make the cut your own.</h1><p class="page-subtitle">Trim, reframe, add layered text, adjust the look, mix your own audio and export short clips in-browser.</p></div>
             <span class="soft-pill"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> YOUR FILE STAYS LOCAL</span>
           </div>
+          <nav class="editor-shortcuts" aria-label="Editor sections"><button type="button" data-editor-target="editor-timeline">Timeline</button><button type="button" data-editor-target="frame-panel">Frame</button><button type="button" data-editor-target="look-panel">Look</button><button type="button" data-editor-target="text-panel">Text</button><button type="button" data-editor-target="audio-panel">Audio</button><button type="button" data-editor-target="export-panel">Export</button></nav>
           <div class="editor-layout">
             <section class="panel editor-workspace">
               <div class="editor-toolbar"><div><b style="font-size:11px">Preview canvas</b><span id="editor-file-label" style="display:block;margin-top:3px">Choose a clip to open your edit desk</span></div><button class="button small" id="editor-import"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add clip</button></div>
@@ -849,19 +873,26 @@
                 </div>
               </div>
               <div class="mini-actions" style="margin-top:10px"><button class="button small" id="toggle-preview" type="button">▶ Play / pause</button><button class="button small" id="restart-preview" type="button">↺ Back to trim start</button></div>
-              <div class="timeline">
-                <div class="timeline-head"><span>EDIT TIMELINE · LIVE PREVIEW</span><span id="time-readout">00:00 / 00:00</span></div>
-                <input id="scrub-range" class="scrub-range" type="range" min="0" max="100" value="0" aria-label="Scrub through clip">
+              <div class="timeline" id="editor-timeline">
+                <div class="timeline-head"><span>SOURCE PLAYHEAD</span><span id="time-readout">00:00 / 00:00</span></div>
+                <input id="scrub-range" class="scrub-range" type="range" min="0" max="100" value="0" aria-label="Scrub through the source video">
+                <div class="timeline-head"><span>EDIT TIMELINE</span><span id="timeline-duration">Current trim · 00:00</span></div>
                 <div class="timeline-lanes">
-                  <div class="timeline-lane"><span>VIDEO</span><div class="timeline-track"><div class="timeline-clip"></div><div class="timeline-playhead" id="playhead"></div></div></div>
-                  <div class="timeline-lane"><span>TEXT</span><div class="timeline-track"><div class="timeline-text-clip"></div></div></div>
-                  <div class="timeline-lane"><span>AUDIO</span><div class="timeline-track"><div class="timeline-audio-clip" id="timeline-audio"></div></div></div>
+                  <div class="timeline-lane"><span>VIDEO</span><div class="timeline-track"><div class="cut-strip" id="cut-strip"></div><div class="timeline-playhead" id="playhead" style="left:0%"></div></div></div>
+                  <div class="timeline-lane"><span>TEXT</span><div class="timeline-track"><div class="timeline-text-clip" id="timeline-text" hidden></div></div></div>
+                  <div class="timeline-lane"><span>AUDIO</span><div class="timeline-track"><div class="timeline-audio-clip" id="timeline-audio" style="left:0;width:100%" hidden></div></div></div>
                 </div>
+                <div class="mini-actions"><button class="button small" id="add-cut" type="button">＋ Add trim to timeline</button><button class="button small" id="update-cut" type="button" disabled>Update selected cut</button><button class="button small" id="split-cut" type="button">✂ Split at playhead</button><button class="button small" id="preview-timeline" type="button">▶ Preview timeline</button></div>
+                <div class="field-pair"><div><label class="field-label" for="cut-transition">BETWEEN CUTS</label><select class="select-field full-select" id="cut-transition"><option value="cut">Hard cut</option><option value="fade">Quick fade through black</option></select></div></div><div class="mini-actions"><button class="button small" id="undo-cuts" type="button" disabled>Undo cut</button><button class="button small" id="redo-cuts" type="button" disabled>Redo cut</button><button class="button small" id="clear-cuts" type="button" disabled>Clear timeline</button></div>
+                <div class="cut-list" id="cut-list" aria-label="Ordered cuts"></div>
+                <p class="project-notice" id="timeline-note">No cuts yet. Export uses the current trim. Add ranges from this source to build a sequence.</p>
+                <div class="project-actions"><button class="button small" id="save-project" type="button">Save project file</button><button class="button small" id="open-project" type="button">Open project file</button><input id="project-file" type="file" accept=".json,application/json" hidden></div>
+                <p class="project-notice" id="project-status">Project files save edit settings, not your video or audio. Keep your original files to reopen an edit.</p>
               </div>
               <div class="editor-note" style="margin-top:12px"><b>Phone-first export:</b> renders the visible edit in real time at a moderate resolution. Keep clips short, stay on this page while it renders, and use only footage/audio you are authorized to use. Browser support and output format vary by device.</div>
             </section>
             <aside class="editor-side">
-              <section class="panel control-panel">
+              <section class="panel control-panel" id="frame-panel">
                 <div class="panel-kicker">FRAME &amp; MOTION</div><h3>Set the shot</h3><p>Choose your canvas, fit, rotation and playback speed. These settings also affect the export preview.</p>
                 <div class="ratio-row" role="group" aria-label="Export aspect ratio">
                   <button class="ratio-button active" data-ratio="portrait">9:16</button><button class="ratio-button" data-ratio="square">1:1</button><button class="ratio-button" data-ratio="wide">16:9</button>
@@ -869,53 +900,54 @@
                 <div class="field-pair"><div><label class="field-label" for="fit-mode">FRAME FIT</label><select class="select-field full-select" id="fit-mode"><option value="cover">Fill canvas</option><option value="contain">Fit whole clip</option></select></div><div><label class="field-label" for="playback-speed">PLAYBACK SPEED</label><select class="select-field full-select" id="playback-speed"><option value="0.5">0.5× slow</option><option value="0.75">0.75×</option><option value="1" selected>1× normal</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2× fast</option></select></div></div>
                 <div class="mini-actions"><button class="button small" id="rotate-clip">↻ Rotate 90°</button><button class="button small" id="flip-clip">⇋ Flip horizontal</button><button class="button small" id="reset-transform">Reset frame</button></div>
                 <div class="slider-control"><label for="zoom-start">Start zoom <output id="zoom-start-value">100%</output></label><input class="control-range" id="zoom-start" type="range" min="50" max="250" value="100"></div>
-                <label class="check-control"><input id="zoom-animate" type="checkbox"> Animate zoom across the trim</label>
+                <label class="check-control"><input id="zoom-animate" type="checkbox"> Animate zoom across the full edit</label>
                 <div class="slider-control"><label for="zoom-end">End zoom <output id="zoom-end-value">100%</output></label><input class="control-range" id="zoom-end" type="range" min="50" max="250" value="100"></div>
                 <div class="slider-control"><label for="pan-x">Horizontal position <output id="pan-x-value">0%</output></label><input class="control-range" id="pan-x" type="range" min="-100" max="100" value="0"></div>
                 <div class="slider-control"><label for="pan-y">Vertical position <output id="pan-y-value">0%</output></label><input class="control-range" id="pan-y" type="range" min="-100" max="100" value="0"></div>
-                <p class="creator-description">The zoom moves smoothly between the start and end of the selected trim. This is not multi-point motion tracking.</p>
+                <p class="creator-description">The zoom moves smoothly between the start and end of the full edit. This is not multi-point motion tracking.</p>
                 <label class="field-label" for="trim-in">TRIM POINTS · SECONDS</label>
                 <div class="trim-grid"><div><label class="field-label" for="trim-in" style="margin-top:0">IN</label><input class="number-field" id="trim-in" type="number" min="0" step="0.1" value="0"></div><div><label class="field-label" for="trim-out" style="margin-top:0">OUT</label><input class="number-field" id="trim-out" type="number" min="0" step="0.1" value="0"></div></div>
                 <div class="mini-actions"><button class="button small" id="set-in">Set in at playhead</button><button class="button small" id="set-out">Set out at playhead</button><button class="button small" id="play-trim"><svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview trim</button></div>
               </section>
-              <section class="panel control-panel">
+              <section class="panel control-panel" id="look-panel">
                 <div class="panel-kicker">LOOK &amp; COLOR</div><h3>Dial in the footage</h3><p>Simple browser filters. These affect the preview and exported frames, not the source file.</p>
                 <div class="preset-row" role="group" aria-label="Color presets"><button class="preset-button active" data-preset="clean">Clean</button><button class="preset-button" data-preset="punch">Punch</button><button class="preset-button" data-preset="warm">Warm</button><button class="preset-button" data-preset="mono">Mono</button></div>
                 <div class="slider-control"><label for="brightness-range">Brightness <output id="brightness-value">100%</output></label><input class="control-range" id="brightness-range" type="range" min="60" max="150" value="100"></div>
                 <div class="slider-control"><label for="contrast-range">Contrast <output id="contrast-value">100%</output></label><input class="control-range" id="contrast-range" type="range" min="60" max="170" value="100"></div>
                 <div class="slider-control"><label for="saturation-range">Saturation <output id="saturation-value">100%</output></label><input class="control-range" id="saturation-range" type="range" min="0" max="180" value="100"></div>
                 <div class="slider-control"><label for="vignette-range">Edge vignette <output id="vignette-value">0%</output></label><input class="control-range" id="vignette-range" type="range" min="0" max="100" value="0"></div>
-                <div class="field-pair"><div><label class="field-label" for="fade-in">FADE IN · SOURCE SECONDS</label><select class="select-field full-select" id="fade-in"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div><div><label class="field-label" for="fade-out">FADE OUT · SOURCE SECONDS</label><select class="select-field full-select" id="fade-out"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div></div>
+                <div class="field-pair"><div><label class="field-label" for="fade-in">FADE IN · EDIT SECONDS</label><select class="select-field full-select" id="fade-in"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div><div><label class="field-label" for="fade-out">FADE OUT · EDIT SECONDS</label><select class="select-field full-select" id="fade-out"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div></div>
               </section>
-              <section class="panel control-panel">
+              <section class="panel control-panel" id="text-panel">
                 <div class="panel-kicker">TEXT LAYERS</div><h3>Make the story readable</h3><p>Draft two layers of on-screen text. The editor does not create captions from speech yet.</p>
                 <label class="field-label" for="overlay-input">HEADLINE</label><input class="text-field" id="overlay-input" maxlength="80" placeholder="e.g. THIS CHANGED THE GAME">
                 <label class="field-label" for="subtitle-input">SUPPORTING LINE</label><input class="text-field" id="subtitle-input" maxlength="100" placeholder="Add context, a stat or your take…">
                 <div class="field-pair"><div><label class="field-label" for="title-position">HEADLINE POSITION</label><select class="select-field full-select" id="title-position"><option value="top">Upper third</option><option value="center">Center</option><option value="bottom" selected>Lower third</option></select></div><div><label class="field-label" for="title-size">TEXT SIZE</label><input class="control-range" id="title-size" type="range" min="18" max="48" value="30"></div></div>
-                <div class="field-pair color-pair"><div><label class="field-label" for="title-color">HEADLINE COLOR</label><input class="color-input" id="title-color" type="color" value="#ffffff"></div><div><label class="field-label" for="accent-color">ACCENT COLOR</label><input class="color-input" id="accent-color" type="color" value="#c8f276"></div><label class="check-control"><input id="text-backplate" type="checkbox" checked> Soft text backplate</label></div>
-                <div class="field-pair"><div><label class="field-label" for="text-animation">HEADLINE ENTRANCE</label><select class="select-field full-select" id="text-animation"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop in</option><option value="slide">Slide up</option></select></div><div><label class="field-label" for="text-start">SHOW AT · SEC AFTER TRIM IN</label><input class="number-field" id="text-start" type="number" min="0" max="3600" step="0.1" value="0"></div></div>
-                <label class="field-label" for="text-end">HIDE AT · SEC AFTER TRIM IN (0 = END)</label><input class="number-field" id="text-end" type="number" min="0" max="3600" step="0.1" value="0">
-                <p class="creator-description">Timing and entrance apply to the headline; the supporting line stays visible. Review readability before posting.</p>
+                <div class="field-pair"><div><label class="field-label" for="title-font">TEXT FONT</label><select class="select-field full-select" id="title-font"><option value="bold">Bold sans</option><option value="condensed">Condensed</option><option value="serif">Editorial serif</option><option value="mono">Monospace</option></select></div><div><label class="field-label" for="title-case">LETTER CASE</label><select class="select-field full-select" id="title-case"><option value="upper">UPPERCASE</option><option value="original">As typed</option></select></div></div><div class="field-pair color-pair"><div><label class="field-label" for="title-color">HEADLINE COLOR</label><input class="color-input" id="title-color" type="color" value="#ffffff"></div><div><label class="field-label" for="accent-color">ACCENT COLOR</label><input class="color-input" id="accent-color" type="color" value="#c8f276"></div><label class="check-control"><input id="text-backplate" type="checkbox" checked> Soft text backplate</label></div>
+                <div class="field-pair"><div><label class="field-label" for="text-animation">HEADLINE ENTRANCE</label><select class="select-field full-select" id="text-animation"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop in</option><option value="slide">Slide up</option></select></div><div><label class="field-label" for="text-start">SHOW AT · EDIT SECONDS</label><input class="number-field" id="text-start" type="number" min="0" max="3600" step="0.1" value="0"></div></div>
+                <label class="field-label" for="text-end">HIDE AT · EDIT SECONDS (0 = END)</label><input class="number-field" id="text-end" type="number" min="0" max="3600" step="0.1" value="0">
+                <div class="field-pair"><div><label class="field-label" for="subtitle-start">SUPPORTING LINE START · SEC</label><input class="number-field" id="subtitle-start" type="number" min="0" max="3600" step="0.1" value="0"></div><div><label class="field-label" for="subtitle-end">SUPPORTING LINE END · SEC (0 = END)</label><input class="number-field" id="subtitle-end" type="number" min="0" max="3600" step="0.1" value="0"></div></div><p class="creator-description">Times refer to the finished edit, including cuts and speed changes. Review readability before posting.</p>
               </section>
-              <section class="panel control-panel">
+              <section class="panel control-panel" id="audio-panel">
                 <div class="panel-kicker">AUDIO MIX</div><h3>Keep the sound clean</h3><p>Set source volume and optionally add an audio file you are licensed to use.</p>
                 <div class="slider-control"><label for="source-volume">Clip audio <output id="source-volume-value">100%</output></label><input class="control-range" id="source-volume" type="range" min="0" max="100" value="100"></div>
                 <div class="music-row"><input type="file" id="music-file" accept="audio/*" hidden><button class="button small" id="choose-music" type="button"><svg class="icon icon-sm"><use href="#i-upload"></use></svg> Add your audio</button><button class="button small" id="preview-music" type="button" hidden><svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview</button><button class="button small" id="remove-music" type="button" hidden>Remove</button><span id="music-label">No added audio</span></div>
                 <div class="slider-control"><label for="music-volume">Added audio <output id="music-volume-value">24%</output></label><input class="control-range" id="music-volume" type="range" min="0" max="100" value="24"></div>
                 <div class="field-pair"><div><label class="field-label" for="audio-fade-in">AUDIO FADE IN</label><select class="select-field full-select" id="audio-fade-in"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div><div><label class="field-label" for="audio-fade-out">AUDIO FADE OUT</label><select class="select-field full-select" id="audio-fade-out"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div></div>
-                <p class="creator-description">Audio fades affect both the clip and added audio, measured in source seconds from the trim.</p>
+                <p class="creator-description">Audio fades affect both the source and added audio, measured in finished-edit seconds.</p>
                 <audio id="music-player" hidden></audio>
                 <div class="editor-note"><b>Add a TikTok sound after export:</b> save your edit, open TikTok, upload it, then tap <b>Add sound</b>. Choose audio allowed for your account and use. TikTok’s catalog is not connected to Cutline.</div>
                 <a class="source-link" href="https://ads.tiktok.com/business/creativecenter/music/pc/en" target="_blank" rel="noopener noreferrer">Browse TikTok Commercial Music Library <span>↗</span></a>
                 <a class="source-link" href="https://ads.tiktok.com/help/article/how-to-use-the-commercial-music-library" target="_blank" rel="noopener noreferrer">Check music usage guidance <span>↗</span></a>
               </section>
-              <section class="panel control-panel export-panel">
-                <div class="panel-kicker">FINISH YOUR CUT</div><h3>Render &amp; save</h3><p>Export a short clip from this browser. This is a real-time render; avoid switching apps until it finishes.</p>
+              <section class="panel control-panel export-panel" id="export-panel">
+                <div class="panel-kicker">FINISH YOUR CUT</div><h3>Render &amp; save</h3><p>Export up to 60 seconds of planned edit time from one source video. Rendering is real time; keep this page open and review the entire result.</p>
+                <label class="field-label" for="export-quality">EXPORT RESOLUTION · SHORT SIDE</label><select class="select-field full-select" id="export-quality"><option value="balanced">Balanced · 540p for sequences, 720p for one cut</option><option value="540">540p · faster</option><option value="720">720p · more detail, slower</option></select>
                 <button class="button primary export-button" id="editor-export"><svg class="icon icon-sm"><use href="#i-bolt"></use></svg> Export current edit</button>
                 <div class="export-status" id="export-status" role="status">No export started.</div>
                 <div class="export-progress" id="export-progress" hidden><div class="export-progress-head"><span id="export-progress-label">Preparing…</span><span id="export-progress-value">0%</span></div><div class="progress-track"><span id="export-progress-fill"></span></div><button class="button small" id="cancel-export" type="button">Cancel</button></div>
                 <div class="export-result" id="export-result" hidden></div>
-                <div class="local-note">A browser-compatible MP4 or WebM is selected automatically where supported. Export may be unavailable on older phones or some in-app browsers.</div>
+                <div class="local-note">The browser may drop frames or add a brief pause between cuts. The final frame is held briefly for encoding. MP4/WebM and codec support varies; check the whole file before posting.</div>
               </section>
             </aside>
           </div>
@@ -969,28 +1001,6 @@
     <button class="nav-item" data-view="profile"><svg class="icon"><use href="#i-user"></use></svg><span>Profile</span></button>
   </nav>
 
-  <div class="modal-backdrop" id="auth-modal" hidden>
-    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <button class="icon-button modal-close" id="close-auth" aria-label="Close sign in"><svg class="icon"><use href="#i-close"></use></svg></button>
-      <span class="offline-badge">ACCOUNT FLOW · PREVIEW ONLY</span>
-      <h2 id="auth-title">Your workspace, wherever you create.</h2>
-      <p>Email verification and Google sign-in are part of the plan. They aren't connected in this prototype, so these buttons will not create an account or send mail.</p>
-      <form id="auth-form">
-        <label class="field-label" for="auth-email">EMAIL ADDRESS</label>
-        <input class="text-field" type="email" id="auth-email" autocomplete="email" placeholder="you@example.com" required>
-        <button class="button primary" type="submit">Preview email-code step</button>
-      </form>
-      <div id="otp-step" hidden>
-        <div class="modal-notice">Preview only: no verification email was sent. A secure auth/email service must be connected before this works for real.</div>
-        <label class="field-label" for="auth-code">6-DIGIT VERIFICATION CODE</label>
-        <input class="text-field" id="auth-code" inputmode="numeric" maxlength="6" placeholder="000000">
-        <button class="button" id="verify-preview" type="button">Continue preview</button>
-      </div>
-      <div class="divider">OR</div>
-      <button class="button google-button" id="google-preview" type="button"><b style="font-size:14px">G</b> Continue with Google</button>
-      <div class="modal-notice">Google OAuth, email delivery, accounts and cross-device sync require a connected provider. Do not enter a real verification code here.</div>
-    </section>
-  </div>
   <div class="modal-backdrop" id="coach-consent-modal" hidden>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="coach-consent-title">
       <button class="icon-button modal-close" id="close-coach-consent" aria-label="Close Coach confirmation"><svg class="icon"><use href="#i-close"></use></svg></button>
@@ -1021,6 +1031,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="/editor-core.js"></script>
   <script>
     (() => {
       const STORAGE_KEY = 'cutline-studio-preview-v1';
@@ -1032,6 +1043,7 @@
       let toastTimer = null;
       let pendingCoach = null;
       let coachInFlight = false;
+      let coachAbortController = null;
       let pendingClipSuggestion = null;
       // Grounded Search content is displayed only in this tab and is not saved
       // into the browser's long-lived chat history.
@@ -1092,12 +1104,13 @@
         return addMessageToChat(activeChat() || makeChat(), role, text, extra);
       }
       function submitPrompt(text, mode) {
-        const prompt = String(text || '').trim();
+        const engine = document.getElementById('coach-engine').value === 'arena' ? 'arena' : 'gemini';
+        const youtubeUrl = engine === 'gemini' ? document.getElementById('coach-video-url').value.trim() : '';
+        const prompt = String(text || '').trim() || (youtubeUrl ? 'Summarize this video and suggest possible sports-edit moments.' : '');
         if (!prompt) { showToast('Paste a YouTube link or enter a sports-edit question first.'); return; }
         switchView('coach');
         document.getElementById('chat-input').value = prompt;
         if (coachInFlight) { showToast('A Coach request is already in progress.'); return; }
-        const engine = document.getElementById('coach-engine').value === 'arena' ? 'arena' : 'gemini';
         if ((engine === 'gemini' && !aiConnection.coachReady) || (engine === 'arena' && !aiConnection.arenaReady)) {
           showToast('The selected AI engine is not configured. Nothing was sent.');
           return;
@@ -1105,6 +1118,7 @@
         pendingCoach = {
           prompt,
           engine,
+          youtubeUrl,
           mode: mode || 'brainstorm',
           chatId: activeChat()?.id || null,
           research: engine === 'gemini' && document.getElementById('coach-research').checked,
@@ -1112,7 +1126,7 @@
         };
         document.getElementById('coach-consent-intro').textContent = engine === 'arena'
           ? 'Your message and up to six recent chat messages will be sent to Arena as text. Arena will not receive or watch the video behind a link and cannot verify current trends.'
-          : 'Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.';
+          : 'Your message, any public YouTube link, and up to six recent chat messages will be sent to Google Gemini. Only public YouTube videos can be analyzed; a link will not be downloaded.' + (youtubeUrl ? `\n\nThe link in the attachment field will also be sent: ${youtubeUrl}` : '');
         document.getElementById('coach-consent-privacy').textContent = engine === 'arena'
           ? 'Privacy and cost: Arena and its model provider terms, quotas and possible charges apply. Do not send private information you do not want to share.'
           : 'Privacy and cost: Google’s terms and rate limits apply; unpaid-service content may be used to improve Google products. Requests may cost money depending on your plan. Do not send private information you do not want to share.';
@@ -1129,6 +1143,9 @@
         const send = document.getElementById('coach-send');
         send.disabled = sending;
         send.textContent = sending ? 'Analyzing…' : 'Send';
+        document.getElementById('coach-cancel').hidden = !sending;
+        const selected = document.getElementById('coach-engine').value;
+        document.getElementById('coach-test').disabled = sending || (selected === 'arena' ? !aiConnection.arenaReady : !aiConnection.coachReady);
       }
       function closeCoachConsent() {
         document.getElementById('coach-consent-modal').hidden = true;
@@ -1149,6 +1166,7 @@
         closeCoachConsent();
         document.getElementById('chat-input').value = '';
         document.getElementById('starter-prompt').value = '';
+        coachAbortController = new AbortController();
         setCoachSending(true);
         renderAll();
         showToast('Coach is analyzing. Keep this page open.');
@@ -1156,7 +1174,8 @@
           const response = await fetch('/api/coach', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Coach-Consent': 'yes' },
-            body: JSON.stringify({ prompt: request.prompt, engine: request.engine, mode: request.mode, history, research: request.research, arena: request.arena }),
+            signal: coachAbortController.signal,
+            body: JSON.stringify({ prompt: request.prompt, engine: request.engine, youtubeUrl:request.youtubeUrl, mode: request.mode, history, research: request.research, arena: request.arena }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `Coach request failed (${response.status}).`);
@@ -1177,9 +1196,11 @@
           if (message) showToast('Coach response received. Check the footage and facts.');
           else showToast('The chat was deleted while the request was running.');
         } catch (error) {
-          addMessageToChat(chat, 'assistant', error.message || 'The Coach request did not complete.', { kind: 'error' });
-          showToast(error.message || 'The Coach request did not complete.');
+          const message = error.name === 'AbortError' ? 'Request canceled. The provider may still charge for work already started.' : (error.message || 'The Coach request did not complete.');
+          addMessageToChat(chat, 'assistant', message, { kind: 'error' });
+          showToast(message);
         } finally {
+          coachAbortController = null;
           setCoachSending(false);
           renderAll();
         }
@@ -1332,6 +1353,12 @@
               use.addEventListener('click', () => prepareSuggestedClip(clip, message.youtubeUrl));
               card.append(heading, reason, use); list.appendChild(card);
             });
+            if (message.provider !== 'arena' && message.youtubeUrl && message.clips.length > 1) {
+              const assemble = document.createElement('button'); assemble.type = 'button'; assemble.className = 'button small';
+              assemble.textContent = 'Build timeline from these moments';
+              assemble.addEventListener('click', () => prepareSuggestedTimeline(message.clips, message.youtubeUrl));
+              list.appendChild(assemble);
+            }
             body.appendChild(list);
           }
           if (message.kind === 'ai') {
@@ -1352,6 +1379,16 @@
             if (message.provider === 'arena' && message.arenaRecipe && typeof message.arenaRecipe === 'object') {
               const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'button small'; apply.textContent = 'Review & apply Arena edit recipe';
               apply.addEventListener('click', () => applyArenaRecipe(message.arenaRecipe)); actions.appendChild(apply);
+            }
+            if (message.provider !== 'arena' && typeof message.youtubeUrl === 'string' && message.youtubeUrl) {
+              const attach = document.createElement('button'); attach.type = 'button'; attach.className = 'button small'; attach.textContent = 'Attach video for follow-up';
+              attach.addEventListener('click', () => {
+                if (!aiConnection.coachReady) { showToast('Gemini must be configured to analyze video.'); return; }
+                document.getElementById('coach-engine').value = 'gemini'; updateCoachConnection();
+                document.getElementById('coach-video-url').value = message.youtubeUrl;
+                document.getElementById('chat-input').focus(); showToast('Video attached for future confirmed Gemini requests. Clear it when done.');
+              });
+              actions.appendChild(attach);
             }
             const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'button small'; copy.textContent = 'Copy ideas';
             copy.addEventListener('click', () => copyCoachText([message.text, message.arenaText].filter(Boolean).join('\n\n')));
@@ -1450,8 +1487,11 @@
       function setFile(file) {
         if (isExporting || exportPreparing) { showToast('Finish or cancel the export before changing videos.'); return; }
         if (!file || !file.type.startsWith('video/')) { showToast('Please choose a supported video file.'); return; }
+        if (currentFile && editCuts.length && !confirm('Changing the source clears this timeline. Save your project first if you want to keep the edit. Continue?')) return;
+        stopSequencePlayback();
         if (currentFileUrl) URL.revokeObjectURL(currentFileUrl);
         currentFile = file;
+        resetTimelineForSource();
         currentFileUrl = URL.createObjectURL(file);
         document.getElementById('trim-in').value = '0';
         document.getElementById('trim-out').value = '0';
@@ -1462,6 +1502,7 @@
         document.getElementById('ai-review-result').hidden = true;
         document.getElementById('report-panel').hidden = true;
         document.getElementById('editor-file-label').textContent = file.name + ' · loading metadata…';
+        if (!pendingClipSuggestion) document.getElementById('editor-suggestion-status').hidden = true;
         editorEmpty.hidden = true;
         fileDetails.hidden = false;
         fileDetails.className = 'file-meta';
@@ -1479,14 +1520,19 @@
           waitForMetadata(editorPlayer).then(() => {
             if (currentFile !== file || pendingClipSuggestion !== pending) return;
             pendingClipSuggestion = null;
-            applySuggestedClip(pending);
+            if (pending.kind === 'timeline') applySuggestedTimeline(pending);
+            else applySuggestedClip(pending);
           }).catch(error => { showSuggestionStatus(error.message || 'Could not read the selected video. Choose another file.'); });
         }
       }
       function clearFile() {
         if (isExporting || exportPreparing) { showToast('Finish or cancel the export before removing the video.'); return; }
+        if (editCuts.length && !confirm('Removing this video clears the timeline. Save your project first if you want to keep the edit. Continue?')) return;
+        stopSequencePlayback();
         if (currentFileUrl) URL.revokeObjectURL(currentFileUrl);
-        currentFile = null; currentFileUrl = null;
+        currentFile = null; currentFileUrl = null; pendingClipSuggestion = null;
+        document.getElementById('editor-suggestion-status').hidden = true;
+        resetTimelineForSource();
         [breakdownPlayer, editorPlayer, analysisSampler].forEach(video => { video.pause(); video.removeAttribute('src'); video.load(); });
         breakdownWrap.hidden = true; fileDetails.hidden = true; editorEmpty.hidden = false;
         document.getElementById('report-panel').hidden = true;
@@ -1567,13 +1613,15 @@
             showToast('The suggested time does not fit this file.');
             return;
           }
-          const approved = window.confirm(`Apply the approximate ${momentTime(suggestion.start)}–${momentTime(suggestion.end)} moment to “${file.name}”?\n\nThis must be an authorized copy of the same full YouTube video. Verify the AI timestamp. The editor will set the trim, 9:16 frame and suggested headline.`);
+          const approved = window.confirm(`Apply the approximate ${momentTime(suggestion.start)}–${momentTime(suggestion.end)} moment to “${file.name}”?\n\nThis must be an authorized copy of the same full YouTube video. Verify the AI timestamp. The editor will set the trim, 9:16 frame and suggested headline.${editCuts.length ? '\n\nThis will clear the existing cut list; use Undo cut to restore it.' : ''}`);
           if (!approved) {
             pendingClipSuggestion = suggestion;
             showSuggestionStatus('Not applied. Choose the matching authorized full video with Add clip, or pick another moment.');
             return;
           }
           pendingClipSuggestion = null;
+          stopSequencePlayback();
+          if (editCuts.length) { rememberCuts(); editCuts = []; selectedCut = -1; }
           document.getElementById('trim-in').value = suggestion.start.toFixed(1);
           document.getElementById('trim-out').value = Math.min(duration, suggestion.end).toFixed(1);
           document.querySelector('.ratio-button[data-ratio="portrait"]').click();
@@ -1587,6 +1635,45 @@
           showToast('The suggested moment could not be applied.');
         }
       }
+      function prepareSuggestedTimeline(clips, youtubeUrl) {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the current export first.'); return; }
+        const suggestions = Array.isArray(clips) ? clips.slice(0,4).map(clip => Core.cut({ start:Number(clip?.startSeconds), end:Number(clip?.endSeconds), speed:1, label:String(clip?.label || 'Suggested moment') })) : [];
+        if (suggestions.length < 2 || suggestions.some(item => !item)) { showToast('These suggested time ranges are invalid. Try individual moments.'); return; }
+        const suggestion = { kind:'timeline', cuts:suggestions, overlay:String(clips[0]?.overlay || '').slice(0,80), youtubeUrl:String(youtubeUrl || '') };
+        switchView('editor');
+        if (!currentFile) {
+          pendingClipSuggestion=suggestion;
+          showSuggestionStatus(`${suggestions.length} approximate moments are ready. Choose an authorized copy of the same FULL video; YouTube footage is not downloaded.`);
+          showToast('Choose your authorized copy of the same full video.'); fileInput.click(); return;
+        }
+        applySuggestedTimeline(suggestion);
+      }
+      async function applySuggestedTimeline(suggestion) {
+        if (!currentFile || isExporting || exportPreparing) return;
+        const file=currentFile;
+        try {
+          await waitForMetadata(editorPlayer);
+          if (currentFile !== file || isExporting || exportPreparing) return;
+          const validated=Core.cuts(suggestion.cuts,editorPlayer.duration);
+          if (!validated) {
+            pendingClipSuggestion=suggestion;
+            showSuggestionStatus('One or more suggested times do not fit this file. Choose the same full video or apply moments individually; AI timestamps can be wrong.');
+            showToast('Some suggested times do not fit this file.'); return;
+          }
+          const ranges=validated.map((item,index) => `${index+1}. ${momentTime(item.start)}–${momentTime(item.end)} · ${item.label}`).join('\n');
+          const tooLong=Core.sourceDuration(validated)>60.001 || Core.outputDuration(validated)>60.001;
+          if (!confirm(`Build a timeline on “${file.name}” from these approximate Gemini suggestions?\n\n${ranges}\n\nThis must be an authorized copy of the same full YouTube video. Verify every moment; AI can be wrong. This replaces the current cut list and sets a 9:16 frame.${tooLong ? '\n\nThis sequence exceeds the 60-second export limit. Shorten or remove cuts before export.' : ''}`)) {
+            pendingClipSuggestion=suggestion; showSuggestionStatus('Not applied. Verify the matching authorized full video, then choose the moments again.'); return;
+          }
+          pendingClipSuggestion=null; stopSequencePlayback(); rememberCuts(); editCuts=validated; selectedCut=0;
+          document.querySelector('.ratio-button[data-ratio="portrait"]').click();
+          document.getElementById('overlay-input').value=suggestion.overlay;
+          loadCutControls(0,true); renderTimeline();
+          showSuggestionStatus(`${validated.length} approximate AI moments added in the suggested order. Check every cut and reorder or trim as needed${tooLong ? '; shorten the timeline to export' : ''}.`);
+          showToast('Suggested moments added. Preview and verify them.');
+        } catch (error) { showSuggestionStatus(error.message || 'This browser could not read the selected video.'); showToast('The suggested timeline could not be applied.'); }
+      }
+
       async function waitForDecodedFrame(video) {
         await waitForMetadata(video);
         if (video.readyState >= 2) return;
@@ -1678,6 +1765,8 @@
         if (!aiConnection.arenaReady && aiConnection.coachReady) engine.value = 'gemini';
         engine.disabled = !aiConnection.coachReady && !aiConnection.arenaReady;
         const arenaOnly = engine.value === 'arena';
+        document.getElementById('coach-video-url').disabled = arenaOnly;
+        document.getElementById('coach-test').disabled = coachInFlight || (arenaOnly ? !aiConnection.arenaReady : !aiConnection.coachReady);
         const badge = aiConnection.coachReady ? 'GEMINI CONFIGURED' : (aiConnection.arenaReady ? 'ARENA TEXT CONFIGURED' : 'AI SETUP NEEDED');
         document.getElementById('coach-ai-badge').textContent = badge;
         document.getElementById('starter-ai-badge').textContent = badge;
@@ -1698,6 +1787,30 @@
           : 'Gemini can analyze public YouTube links after confirmation. Arena text-only mode cannot watch a video. YouTube videos are not downloaded; supply the same authorized file to edit.';
       }
       document.getElementById('coach-engine').addEventListener('change', updateCoachConnection);
+      document.getElementById('clear-coach-video').addEventListener('click', () => { document.getElementById('coach-video-url').value=''; showToast('Video attachment cleared.'); });
+      document.getElementById('coach-cancel').addEventListener('click', () => { if (coachAbortController) coachAbortController.abort(); });
+      document.getElementById('coach-test').addEventListener('click', async () => {
+        if (coachInFlight) return;
+        const engine=document.getElementById('coach-engine').value==='arena' ? 'arena' : 'gemini';
+        if (engine==='arena' ? !aiConnection.arenaReady : !aiConnection.coachReady) { showToast('The selected AI is not configured.'); return; }
+        const provider=engine==='arena' ? 'Arena' : 'Google Gemini';
+        if (!confirm(`Send a short connection-test prompt to ${provider}? No chat history, YouTube link or media will be sent. This can use provider quota or incur a charge.`)) return;
+        const status=document.getElementById('coach-test-status');
+        status.textContent=`Testing ${provider}…`;
+        coachAbortController=new AbortController(); setCoachSending(true);
+        try {
+          const response=await fetch('/api/coach', {method:'POST',headers:{'Content-Type':'application/json','X-Coach-Consent':'yes'},signal:coachAbortController.signal,body:JSON.stringify({prompt:'Reply with one short sentence confirming that this connection is working.',engine,mode:'brainstorm',history:[],research:false,arena:false})});
+          const payload=await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Connection test failed (${response.status}).`);
+          if (typeof payload.answer!=='string' || !payload.answer.trim()) throw new Error('The provider returned no readable answer.');
+          status.textContent=`${provider} replied to the test. Video analysis, Search and TikTok were not tested.`;
+          showToast('The selected AI replied.');
+        } catch (error) {
+          status.textContent=error.name==='AbortError' ? 'Test canceled. The provider may still charge for work already started.' : (error.message || 'The connection test did not complete.');
+          showToast(status.textContent);
+        } finally { coachAbortController=null; setCoachSending(false); }
+      });
+
       async function refreshAIConnection() {
         const status = document.getElementById('ai-review-status');
         const detail = document.getElementById('ai-review-detail');
@@ -1936,6 +2049,7 @@
       let exportUrl = null;
       let exportRecorder = null;
       let exportCancelled = false;
+      let exportFailure = '';
       let exportAnimation = 0;
       let audioGraph = null;
       let isExporting = false;
@@ -1958,10 +2072,211 @@
         return String(Math.floor(total / 60)).padStart(2,'0') + ':' + String(total % 60).padStart(2,'0');
       }
       function sliderValue(id) { return Number(document.getElementById(id).value) || 0; }
+      const Core = window.CutlineEditorCore;
+      let editCuts = [];
+      let selectedCut = -1;
+      let cutUndo = [], cutRedo = [];
+      let sequencePlayback = null;
+      let sequenceAnimation = 0;
+      const alternatePlayer = document.createElement('video');
+      alternatePlayer.hidden = true; alternatePlayer.playsInline = true; alternatePlayer.preload = 'auto';
+      document.getElementById('view-editor').appendChild(alternatePlayer);
+      let musicFileName = '';
+      function activeEditorPlayer() { return sequencePlayback?.player || editorPlayer; }
+      const cutList = document.getElementById('cut-list');
+      const cutStrip = document.getElementById('cut-strip');
+      function draftCut() {
+        if (!currentFile || !Number.isFinite(editorPlayer.duration)) return null;
+        return Core.cut({ start:sliderValue('trim-in'), end:sliderValue('trim-out'), speed:Number(document.getElementById('playback-speed').value), label:'' }, editorPlayer.duration);
+      }
+      function timelineCuts() { const draft = draftCut(); return editCuts.length ? editCuts : (draft ? [draft] : []); }
+      function timelineClock() {
+        const parts = sequencePlayback ? sequencePlayback.cuts : timelineCuts();
+        const index = sequencePlayback ? sequencePlayback.index : (editCuts.length ? Math.max(0,selectedCut) : 0);
+        return Core.clock(parts, index, activeEditorPlayer().currentTime || 0);
+      }
+      function cutSeconds(seconds) { return Number(seconds).toFixed(1) + 's'; }
+      function cutSnapshot() { return { cuts:editCuts.map(item => ({ ...item })), selected:selectedCut }; }
+      function rememberCuts() { cutUndo.push(cutSnapshot()); if (cutUndo.length > 40) cutUndo.shift(); cutRedo = []; }
+      function restoreCuts(snapshot) { editCuts = snapshot.cuts.map(item => ({ ...item })); selectedCut = editCuts.length ? Math.max(0,Math.min(snapshot.selected, editCuts.length-1)) : -1; if (selectedCut >= 0) loadCutControls(selectedCut, false); renderTimeline(); }
+      function stopSequencePlayback() {
+        const old = sequencePlayback; sequencePlayback = null; cancelAnimationFrame(sequenceAnimation);
+        if (old) {
+          const position = old.player?.currentTime;
+          editorPlayer.pause(); alternatePlayer.pause(); musicPlayer.pause();
+          if (old.player === alternatePlayer && Number.isFinite(position) && currentFile) { try { editorPlayer.currentTime = position; } catch (_) {} }
+          updateAudioLevels();
+        }
+        document.getElementById('preview-timeline').textContent = '▶ Preview timeline';
+      }
+      function resetTimelineForSource() { stopSequencePlayback(); editCuts = []; selectedCut = -1; cutUndo = []; cutRedo = []; renderTimeline(); }
+      function loadCutControls(index, seek = true) {
+        const item = editCuts[index]; if (!item) return;
+        selectedCut = index;
+        document.getElementById('trim-in').value = item.start;
+        document.getElementById('trim-out').value = item.end;
+        document.getElementById('playback-speed').value = item.speed;
+        editorPlayer.playbackRate = item.speed;
+        if (seek && currentFile) { editorPlayer.pause(); editorPlayer.currentTime = item.start; }
+        updateStage();
+      }
+      function selectCut(index) { if (isExporting || exportPreparing) return; stopSequencePlayback(); loadCutControls(index); renderTimeline(); }
+      function renderTimeline() {
+        const list = timelineCuts();
+        const total = Core.outputDuration(list);
+        const source = Core.sourceDuration(list);
+        document.getElementById('timeline-duration').textContent = `${editCuts.length ? editCuts.length + (editCuts.length === 1 ? ' cut' : ' cuts') : 'Current trim'} · ${cutSeconds(total)}`;
+        cutStrip.replaceChildren(); cutList.replaceChildren();
+        list.forEach((item, index) => {
+          const button = document.createElement('button'); button.type = 'button'; button.textContent = editCuts.length ? String(index+1) : 'TRIM';
+          button.style.flex = String(Math.max(0.001, (item.end-item.start) / item.speed)) + ' 1 0';
+          button.title = `${momentTime(item.start)}–${momentTime(item.end)} · ${item.speed}×`;
+          button.setAttribute('aria-label', `${editCuts.length ? 'Select cut ' + (index+1) : 'Current trim'}: ${cutSeconds(item.start)} to ${cutSeconds(item.end)}, ${item.speed} times speed`);
+          button.classList.toggle('active', !editCuts.length || index === selectedCut);
+          if (editCuts.length) button.addEventListener('click', () => selectCut(index));
+          else button.disabled = true;
+          cutStrip.appendChild(button);
+          if (!editCuts.length) return;
+          const row = document.createElement('div'); row.className = 'cut-row' + (index === selectedCut ? ' active' : '');
+          const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'cut-select';
+          const strong = document.createElement('strong'); strong.textContent = `${String(index+1).padStart(2,'0')} · ${item.label || 'Source cut'}`;
+          const detail = document.createElement('small'); detail.textContent = `${cutSeconds(item.start)} → ${cutSeconds(item.end)} · ${item.speed}× · ${cutSeconds((item.end-item.start)/item.speed)} in edit`;
+          choose.append(strong, detail); choose.addEventListener('click', () => selectCut(index));
+          const actions = document.createElement('div'); actions.className = 'cut-actions';
+          const makeAction = (text, title, disabled, action) => { const control = document.createElement('button'); control.type='button'; control.textContent=text; control.title=title; control.setAttribute('aria-label', title + ' ' + (index+1)); control.disabled=disabled; control.addEventListener('click', action); actions.appendChild(control); };
+          makeAction('↑','Move cut earlier',index===0,() => { stopSequencePlayback(); rememberCuts(); [editCuts[index-1],editCuts[index]]=[editCuts[index],editCuts[index-1]]; selectedCut=index-1; loadCutControls(selectedCut,false); renderTimeline(); });
+          makeAction('↓','Move cut later',index===editCuts.length-1,() => { stopSequencePlayback(); rememberCuts(); [editCuts[index+1],editCuts[index]]=[editCuts[index],editCuts[index+1]]; selectedCut=index+1; loadCutControls(selectedCut,false); renderTimeline(); });
+          makeAction('⧉','Duplicate cut',editCuts.length>=Core.MAX_CUTS,() => { stopSequencePlayback(); rememberCuts(); editCuts.splice(index+1,0,{...item}); selectedCut=index+1; loadCutControls(selectedCut,false); renderTimeline(); });
+          makeAction('×','Remove cut',false,() => { stopSequencePlayback(); rememberCuts(); editCuts.splice(index,1); selectedCut=editCuts.length ? Math.min(index,editCuts.length-1) : -1; if (selectedCut>=0) loadCutControls(selectedCut,false); renderTimeline(); });
+          row.append(choose,actions); cutList.appendChild(row);
+        });
+        document.getElementById('update-cut').disabled = selectedCut < 0 || !editCuts.length;
+        document.getElementById('clear-cuts').disabled = !editCuts.length;
+        document.getElementById('undo-cuts').disabled = !cutUndo.length;
+        document.getElementById('redo-cuts').disabled = !cutRedo.length;
+        const warning = source > 60.001 || total > 60.001 ? ' Export is limited to 60 seconds of source and 60 seconds of planned edit time; shorten the sequence.' : '';
+        document.getElementById('timeline-note').textContent = editCuts.length
+          ? `Cuts use one local source. Change trim or speed, then tap Update selected cut. Source: ${cutSeconds(source)} · finished edit: ${cutSeconds(total)}.${warning}`
+          : `No cuts yet. Export uses the current trim. Add ranges from this source to build a sequence.${warning}`;
+        const textTrack = document.getElementById('timeline-text');
+        const hasText = !!overlayInput.value.trim() && total > 0;
+        const textStart = Math.min(total, Math.max(0,sliderValue('text-start')));
+        const textEnd = Math.min(total, sliderValue('text-end') || total);
+        textTrack.hidden = !hasText || textEnd <= textStart;
+        if (!textTrack.hidden) { textTrack.style.left = (100*textStart/total)+'%'; textTrack.style.width = (100*(textEnd-textStart)/total)+'%'; }
+        document.getElementById('timeline-audio').hidden = !musicObjectUrl;
+        updateTimelinePlayhead();
+      }
+      function updateTimelinePlayhead() { document.getElementById('playhead').style.left = (timelineClock().progress * 100) + '%'; }
+      document.getElementById('add-cut').addEventListener('click', () => {
+        if (!currentFile) { showToast('Choose a source video first.'); return; }
+        if (editCuts.length >= Core.MAX_CUTS) { showToast('The timeline supports up to 12 cuts.'); return; }
+        const item = draftCut(); if (!item) { showToast('Choose valid in and out points within this video.'); return; }
+        stopSequencePlayback(); rememberCuts(); editCuts.push(item); selectedCut=editCuts.length-1; renderTimeline(); showToast('Trim added to the timeline.');
+      });
+      document.getElementById('update-cut').addEventListener('click', () => {
+        const item = draftCut(); if (selectedCut < 0 || !item) { showToast('Choose valid in and out points within this video.'); return; }
+        stopSequencePlayback(); rememberCuts(); item.label=editCuts[selectedCut].label; editCuts[selectedCut]=item; renderTimeline(); showToast('Selected cut updated.');
+      });
+      document.getElementById('split-cut').addEventListener('click', () => {
+        if (!currentFile) { showToast('Choose a source video first.'); return; }
+        if (editCuts.length >= Core.MAX_CUTS) { showToast('The timeline supports up to 12 cuts.'); return; }
+        const item = editCuts.length ? editCuts[selectedCut] : draftCut();
+        const halves = Core.split(item, activeEditorPlayer().currentTime);
+        if (!halves) { showToast('Move the source playhead inside the selected cut, away from its edges.'); return; }
+        stopSequencePlayback(); rememberCuts();
+        if (!editCuts.length) { editCuts=halves; selectedCut=1; }
+        else { editCuts.splice(selectedCut,1,...halves); selectedCut++; }
+        loadCutControls(selectedCut,false); renderTimeline(); showToast('Cut split at the playhead.');
+      });
+      document.getElementById('clear-cuts').addEventListener('click', () => {
+        if (!editCuts.length || !confirm('Clear all cuts? Your source video and other edit settings will remain unchanged.')) return;
+        stopSequencePlayback(); rememberCuts(); editCuts=[]; selectedCut=-1; renderTimeline();
+      });
+      document.getElementById('undo-cuts').addEventListener('click', () => { if (!cutUndo.length) return; stopSequencePlayback(); cutRedo.push(cutSnapshot()); restoreCuts(cutUndo.pop()); });
+      document.getElementById('redo-cuts').addEventListener('click', () => { if (!cutRedo.length) return; stopSequencePlayback(); cutUndo.push(cutSnapshot()); restoreCuts(cutRedo.pop()); });
+      document.querySelectorAll('[data-editor-target]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.editorTarget).scrollIntoView({behavior:'smooth',block:'start'})));
+
+      const PROJECT_CONTROLS = {
+        fit:'fit-mode', speed:'playback-speed', zoomStart:'zoom-start', zoomEnd:'zoom-end', panX:'pan-x', panY:'pan-y',
+        brightness:'brightness-range', contrast:'contrast-range', saturation:'saturation-range', vignette:'vignette-range',
+        titleSize:'title-size', textStart:'text-start', textEnd:'text-end', subtitleStart:'subtitle-start', subtitleEnd:'subtitle-end',
+        sourceVolume:'source-volume', musicVolume:'music-volume', fadeIn:'fade-in', fadeOut:'fade-out', audioFadeIn:'audio-fade-in', audioFadeOut:'audio-fade-out',
+        titlePosition:'title-position', titleAnimation:'text-animation', titleFont:'title-font', titleCase:'title-case', transition:'cut-transition', exportQuality:'export-quality',
+        titleColor:'title-color', accentColor:'accent-color', headline:'overlay-input', subtitle:'subtitle-input', trimIn:'trim-in', trimOut:'trim-out',
+      };
+      const PROJECT_STRING_FIELDS = new Set(['fit','titlePosition','titleAnimation','titleFont','titleCase','transition','exportQuality','titleColor','accentColor','headline','subtitle']);
+      function projectSettings() {
+        const settings = {};
+        for (const [key,id] of Object.entries(PROJECT_CONTROLS)) {
+          const value = document.getElementById(id).value;
+          settings[key] = PROJECT_STRING_FIELDS.has(key) ? value : Number(value);
+        }
+        settings.zoomAnimate = document.getElementById('zoom-animate').checked;
+        settings.textBackplate = document.getElementById('text-backplate').checked;
+        settings.flipX = clipFlipX; settings.ratio = editorRatio; settings.rotation = clipRotation; settings.tone = activeTone;
+        return settings;
+      }
+      document.getElementById('save-project').addEventListener('click', () => {
+        if (!currentFile || !Number.isFinite(editorPlayer.duration)) { showToast('Choose a local source video before saving a project.'); return; }
+        const candidate = { format:'cutline-project', version:1, source:{name:currentFile.name,size:currentFile.size,duration:editorPlayer.duration}, cuts:editCuts, settings:projectSettings(), audioName:musicFileName };
+        const safe = Core.project(candidate);
+        if (!safe) { showToast('Set valid trim points and editor values before saving.'); return; }
+        const url = URL.createObjectURL(new Blob([JSON.stringify(safe,null,2)],{type:'application/json'}));
+        const link = document.createElement('a'); link.href=url; link.download='cutline-project.json'; document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url),30000);
+        document.getElementById('project-status').textContent = 'Project downloaded. Keep your original video and audio separately; this file contains settings and filenames, not media or API keys.';
+        showToast('Project settings downloaded.');
+      });
+      const projectFileInput = document.getElementById('project-file');
+      document.getElementById('open-project').addEventListener('click', () => {
+        if (!currentFile) { showToast('Choose the original source video first, then open the project.'); return; }
+        projectFileInput.click();
+      });
+      projectFileInput.addEventListener('change', async () => {
+        const file = projectFileInput.files && projectFileInput.files[0]; projectFileInput.value='';
+        if (!file || !currentFile || isExporting || exportPreparing) return;
+        if (file.size > 100000) { showToast('Project file is too large. Use a Cutline project JSON file.'); return; }
+        const sourceFile = currentFile;
+        let parsed;
+        try { parsed=Core.project(JSON.parse(await file.text())); } catch (_) {}
+        if (currentFile !== sourceFile || isExporting || exportPreparing) return;
+        if (!parsed) { document.getElementById('project-status').textContent='Project not opened: invalid or unsupported Cutline project file.'; showToast('Invalid or unsupported project file.'); return; }
+        try { await waitForMetadata(editorPlayer); } catch (_) { document.getElementById('project-status').textContent='Project not opened: the source video could not be read.'; showToast('Wait for the source video to load.'); return; }
+        if (currentFile !== sourceFile || isExporting || exportPreparing) return;
+        const duration=editorPlayer.duration;
+        const validatedCuts=Core.cuts(parsed.cuts,duration);
+        if (!validatedCuts || parsed.settings.trimOut > duration + .05) { document.getElementById('project-status').textContent='Project not opened: its time ranges do not fit this video.'; showToast('Project time ranges do not fit this video.'); return; }
+        const mismatch = sourceFile.name !== parsed.source.name || sourceFile.size !== parsed.source.size || Math.abs(duration-parsed.source.duration) > .1;
+        const sourceWarning = mismatch ? `\n\nWarning: the selected video does not match the saved filename, size or duration. Cutline cannot verify it is the same full source. Saved timestamps may be wrong.` : '';
+        if (!confirm(`Open this project for “${sourceFile.name}”? This replaces your current cut list and editor settings. Project files contain no video or audio.${sourceWarning}`)) return;
+        stopSequencePlayback();
+        if (musicObjectUrl && musicFileName !== parsed.audioName) document.getElementById('remove-music').click();
+        const s=parsed.settings;
+        for (const [key,id] of Object.entries(PROJECT_CONTROLS)) document.getElementById(id).value=String(s[key]);
+        document.getElementById('trim-out').value=String(Math.min(duration,s.trimOut));
+        document.getElementById('zoom-animate').checked=s.zoomAnimate;
+        document.getElementById('text-backplate').checked=s.textBackplate;
+        clipFlipX=s.flipX; clipRotation=s.rotation; editorRatio=s.ratio; activeTone=s.tone;
+        document.querySelectorAll('.ratio-button').forEach(button => button.classList.toggle('active',button.dataset.ratio===editorRatio));
+        stage.classList.toggle('ratio-square',editorRatio==='square'); stage.classList.toggle('ratio-wide',editorRatio==='wide');
+        highlightPreset(activeTone === 'custom' ? '' : activeTone);
+        for (const [id,output] of [['brightness-range','brightness-value'],['contrast-range','contrast-value'],['saturation-range','saturation-value'],['zoom-start','zoom-start-value'],['zoom-end','zoom-end-value'],['pan-x','pan-x-value'],['pan-y','pan-y-value'],['vignette-range','vignette-value']]) setOutput(output,document.getElementById(id).value);
+        editCuts=validatedCuts; selectedCut=editCuts.length ? 0 : -1; cutUndo=[]; cutRedo=[];
+        editorPlayer.playbackRate=s.speed;
+        editorPlayer.currentTime=editCuts.length ? editCuts[0].start : s.trimIn;
+        updateAudioLevels(); updateStage(); renderTimeline();
+        document.getElementById('project-status').textContent = parsed.audioName && musicFileName !== parsed.audioName
+          ? `Project opened. Re-add your licensed audio file “${parsed.audioName}”; it is not stored in the project.`
+          : 'Project opened. The source and audio are local files, not stored in the project. Verify all cuts and settings before export.';
+        showToast('Project settings opened. Verify the edit before export.');
+      });
+
       function selectedFilter() {
         const brightness = sliderValue('brightness-range');
         const contrast = sliderValue('contrast-range');
         const saturation = sliderValue('saturation-range');
+        if (brightness === 100 && contrast === 100 && saturation === 100 && activeTone !== 'warm' && activeTone !== 'mono') return 'none';
         return `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)${activeTone === 'warm' ? ' sepia(13%)' : ''}${activeTone === 'mono' ? ' grayscale(100%)' : ''}`;
       }
       function updateStage() {
@@ -1979,6 +2294,7 @@
         subcaption.textContent = subtitleInput.value.trim();
         subcaption.hidden = !subtitleInput.value.trim();
         subcaption.style.color = document.getElementById('accent-color').value;
+        renderTimeline();
         paintEditorPreview();
       }
       function paintEditorPreview() {
@@ -2013,7 +2329,7 @@
           activeTone = 'custom'; highlightPreset(''); updateStage();
         });
       });
-      [overlayInput, subtitleInput, ...['title-color','accent-color','title-position','title-size','text-backplate','text-animation','text-start','text-end','zoom-animate','fade-in','fade-out','trim-in','trim-out'].map(id => document.getElementById(id))].forEach(control => {
+      [overlayInput, subtitleInput, ...['title-color','accent-color','title-position','title-size','title-font','title-case','text-backplate','text-animation','text-start','text-end','subtitle-start','subtitle-end','zoom-animate','fade-in','fade-out','trim-in','trim-out','cut-transition'].map(id => document.getElementById(id))].forEach(control => {
         control.addEventListener('input', updateStage); control.addEventListener('change', updateStage);
       });
       [['zoom-start','zoom-start-value'],['zoom-end','zoom-end-value'],['pan-x','pan-x-value'],['pan-y','pan-y-value'],['vignette-range','vignette-value']].forEach(([id, output]) => {
@@ -2021,7 +2337,7 @@
       });
       window.addEventListener('resize', paintEditorPreview);
       document.getElementById('fit-mode').addEventListener('change', updateStage);
-      document.getElementById('playback-speed').addEventListener('change', () => { editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1; });
+      document.getElementById('playback-speed').addEventListener('change', () => { editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1; renderTimeline(); });
       document.getElementById('rotate-clip').addEventListener('click', () => { clipRotation = (clipRotation + 90) % 360; updateStage(); });
       document.getElementById('flip-clip').addEventListener('click', () => { clipFlipX = !clipFlipX; updateStage(); showToast(clipFlipX ? 'Horizontal flip on.' : 'Horizontal flip off.'); });
       document.getElementById('reset-transform').addEventListener('click', () => {
@@ -2054,24 +2370,32 @@
 
       const sourceVolume = document.getElementById('source-volume');
       const musicVolume = document.getElementById('music-volume');
+      function transitionVisibility(clock) {
+        const list = sequencePlayback ? sequencePlayback.cuts : timelineCuts();
+        const index = sequencePlayback ? sequencePlayback.index : Math.max(0,selectedCut);
+        if (document.getElementById('cut-transition').value !== 'fade' || list.length < 2) return 1;
+        const clamp = value => Math.min(1, Math.max(0, value));
+        return Math.min(index > 0 ? clamp(clock.cutElapsed / .15) : 1, index < list.length-1 ? clamp(clock.cutRemaining / .15) : 1);
+      }
       function updateAudioLevels() {
-        const start = Math.max(0, sliderValue('trim-in'));
-        const end = sliderValue('trim-out') || editorPlayer.duration || start;
-        const time = editorPlayer.currentTime || 0;
+        const clock = timelineClock();
         const fadeIn = sliderValue('audio-fade-in'), fadeOut = sliderValue('audio-fade-out');
         const clamp = value => Math.min(1, Math.max(0, value));
-        const fade = (!editorPlayer.paused || isExporting) ? Math.min(fadeIn ? clamp((time-start)/fadeIn) : 1, fadeOut ? clamp((end-time)/fadeOut) : 1) : 1;
-        const sourceLevel = Number(sourceVolume.value) / 100 * fade;
+        const player = activeEditorPlayer();
+        const fade = (!player.paused || isExporting) ? Math.min(fadeIn ? clamp(clock.elapsed/fadeIn) : 1, fadeOut ? clamp(clock.remaining/fadeOut) : 1) : 1;
+        const sourceLevel = Number(sourceVolume.value) / 100 * fade * transitionVisibility(clock);
         const musicLevel = Number(musicVolume.value) / 100 * fade;
         document.getElementById('source-volume-value').textContent = sourceVolume.value + '%';
         document.getElementById('music-volume-value').textContent = musicVolume.value + '%';
         if (audioGraph) {
-          audioGraph.videoGain.gain.value = sourceLevel;
+          audioGraph.videoGain.gain.value = player === editorPlayer ? sourceLevel : 0;
+          if (audioGraph.alternateGain) audioGraph.alternateGain.gain.value = player === alternatePlayer ? sourceLevel : 0;
           if (audioGraph.musicGain) audioGraph.musicGain.gain.value = musicLevel;
-          editorPlayer.volume = 1;
+          editorPlayer.volume = 1; alternatePlayer.volume = 1;
           musicPlayer.volume = 1;
         } else {
-          editorPlayer.volume = sourceLevel;
+          editorPlayer.volume = player === editorPlayer ? sourceLevel : 0;
+          alternatePlayer.volume = player === alternatePlayer ? sourceLevel : 0;
           musicPlayer.volume = musicLevel;
         }
       }
@@ -2097,6 +2421,14 @@
         updateAudioLevels();
         return audioGraph;
       }
+      function ensureAlternateAudio() {
+        if (!audioGraph || audioGraph.alternateSource) return;
+        const source = audioGraph.context.createMediaElementSource(alternatePlayer);
+        const gain = audioGraph.context.createGain(); gain.gain.value = 0;
+        source.connect(gain); gain.connect(audioGraph.context.destination);
+        audioGraph.alternateSource = source; audioGraph.alternateGain = gain;
+        updateAudioLevels();
+      }
       sourceVolume.addEventListener('input', updateAudioLevels);
       musicVolume.addEventListener('input', updateAudioLevels);
       document.getElementById('audio-fade-in').addEventListener('change', updateAudioLevels);
@@ -2107,14 +2439,15 @@
         const file = musicInput.files && musicInput.files[0];
         if (!file || !file.type.startsWith('audio/')) { if (file) showToast('Choose a supported audio file.'); return; }
         if (musicObjectUrl) URL.revokeObjectURL(musicObjectUrl);
-        musicObjectUrl = URL.createObjectURL(file);
+        musicObjectUrl = URL.createObjectURL(file); musicFileName = file.name;
         musicPlayer.src = musicObjectUrl; musicPlayer.loop = true; musicPlayer.load();
         document.getElementById('music-label').textContent = file.name;
         document.getElementById('preview-music').hidden = false;
         document.getElementById('remove-music').hidden = false;
         document.getElementById('timeline-audio').classList.add('has-audio');
         if (audioGraph) ensureAudioGraph();
-        updateAudioLevels(); musicInput.value = '';
+        updateAudioLevels(); renderTimeline(); musicInput.value = '';
+        document.getElementById('project-status').textContent = 'Audio is local to this device. Save the original file separately; project files contain settings only.';
         showToast('Audio added locally. Use tracks you have rights to use.');
       });
       document.getElementById('preview-music').addEventListener('click', async event => {
@@ -2130,14 +2463,15 @@
         if (isExporting || exportPreparing) { showToast('Finish or cancel the export before changing audio.'); return; }
         musicPlayer.pause(); musicPlayer.removeAttribute('src'); musicPlayer.load();
         if (musicObjectUrl) URL.revokeObjectURL(musicObjectUrl);
-        musicObjectUrl = null; document.getElementById('music-label').textContent = 'No added audio';
+        musicObjectUrl = null; musicFileName = ''; document.getElementById('music-label').textContent = 'No added audio';
         document.getElementById('preview-music').hidden = true; document.getElementById('remove-music').hidden = true;
         document.getElementById('preview-music').innerHTML = '<svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview';
-        document.getElementById('timeline-audio').classList.remove('has-audio'); showToast('Added audio removed.');
+        document.getElementById('timeline-audio').classList.remove('has-audio'); renderTimeline(); showToast('Added audio removed.');
       });
 
       function updateDuration() {
-        const duration = Number.isFinite(editorPlayer.duration) ? editorPlayer.duration : 0;
+        const active = activeEditorPlayer();
+        const duration = Number.isFinite(active.duration) ? active.duration : 0;
         const out = document.getElementById('trim-out');
         const inPoint = document.getElementById('trim-in');
         const scrub = document.getElementById('scrub-range');
@@ -2147,30 +2481,32 @@
           if (Number(inPoint.value) > duration) inPoint.value = '0';
           document.getElementById('editor-file-label').textContent = `${currentFile ? currentFile.name : 'Video'} · ${editorPlayer.videoWidth}×${editorPlayer.videoHeight} · ${timeLabel(duration)}`;
         }
-        document.getElementById('time-readout').textContent = timeLabel(editorPlayer.currentTime || 0) + ' / ' + timeLabel(duration);
-        if (duration) scrub.value = Math.min(duration, editorPlayer.currentTime || 0);
+        document.getElementById('time-readout').textContent = timeLabel(active.currentTime || 0) + ' / ' + timeLabel(duration);
+        if (duration) scrub.value = Math.min(duration, active.currentTime || 0);
       }
-      editorPlayer.addEventListener('loadedmetadata', updateDuration);
+      editorPlayer.addEventListener('loadedmetadata', () => { updateDuration(); renderTimeline(); });
       editorPlayer.addEventListener('loadeddata', paintEditorPreview);
       editorPlayer.addEventListener('seeked', paintEditorPreview);
       let previewAnimation = 0;
       editorPlayer.addEventListener('play', () => {
         cancelAnimationFrame(previewAnimation);
-        const tick = () => { if (editorPlayer.paused || editorPlayer.ended) return; paintEditorPreview(); updateAudioLevels(); previewAnimation = requestAnimationFrame(tick); };
+        if (sequencePlayback) return;
+        const tick = () => { if (editorPlayer.paused || editorPlayer.ended) return; paintEditorPreview(); updateAudioLevels(); updateTimelinePlayhead(); monitorSequence(); previewAnimation = requestAnimationFrame(tick); };
         previewAnimation = requestAnimationFrame(tick);
       });
-      editorPlayer.addEventListener('pause', () => { cancelAnimationFrame(previewAnimation); paintEditorPreview(); if (!isExporting && musicObjectUrl) musicPlayer.pause(); updateAudioLevels(); });
+      editorPlayer.addEventListener('pause', () => { cancelAnimationFrame(previewAnimation); paintEditorPreview(); if (!sequencePlayback && !isExporting && musicObjectUrl) musicPlayer.pause(); updateAudioLevels(); });
       editorPlayer.addEventListener('timeupdate', () => {
         updateDuration();
         paintEditorPreview();
-        const duration = editorPlayer.duration || 1;
-        document.getElementById('playhead').style.left = (Math.max(0, Math.min(100, editorPlayer.currentTime / duration * 100))) + '%';
+        updateTimelinePlayhead();
+        if (sequencePlayback) { if (isExporting) updateExportProgress(); monitorSequence(); return; }
         if (isExporting) { updateExportProgress(); return; }
         const out = Number(document.getElementById('trim-out').value);
         if (!editorPlayer.paused && out > 0 && editorPlayer.currentTime >= out) editorPlayer.pause();
       });
       document.getElementById('scrub-range').addEventListener('input', event => {
-        if (currentFile && !isExporting) {
+        if (currentFile && !isExporting && !exportPreparing) {
+          if (sequencePlayback) stopSequencePlayback();
           editorPlayer.currentTime = Number(event.target.value) || 0;
           if (musicObjectUrl && !musicPlayer.paused && Number.isFinite(musicPlayer.duration) && musicPlayer.duration > 0) {
             const start = Math.max(0, sliderValue('trim-in'));
@@ -2181,17 +2517,18 @@
       });
       document.getElementById('set-in').addEventListener('click', () => {
         if (!currentFile) { showToast('Add a local clip first.'); return; }
-        document.getElementById('trim-in').value = (editorPlayer.currentTime || 0).toFixed(1);
+        document.getElementById('trim-in').value = (activeEditorPlayer().currentTime || 0).toFixed(1);
         showToast('Trim in-point set at the playhead.');
       });
       document.getElementById('set-out').addEventListener('click', () => {
         if (!currentFile) { showToast('Add a local clip first.'); return; }
-        document.getElementById('trim-out').value = (editorPlayer.currentTime || 0).toFixed(1);
+        document.getElementById('trim-out').value = (activeEditorPlayer().currentTime || 0).toFixed(1);
         showToast('Trim out-point set at the playhead.');
       });
       async function playEditorPreview(restart) {
         if (isExporting || exportPreparing) { showToast('Finish or cancel the export first.'); return; }
         if (!currentFile) { showToast('Add a local clip first.'); return; }
+        if (sequencePlayback) stopSequencePlayback();
         const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
         const out = Number(document.getElementById('trim-out').value) || editorPlayer.duration || 0;
         if (out <= start) { showToast('The out-point should be after the in-point.'); return; }
@@ -2214,13 +2551,130 @@
       document.getElementById('toggle-preview').addEventListener('click', () => playEditorPreview(false));
       document.getElementById('restart-preview').addEventListener('click', () => {
         if (!currentFile || isExporting || exportPreparing) return;
-        editorPlayer.pause(); editorPlayer.currentTime = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
+        stopSequencePlayback(); editorPlayer.pause(); editorPlayer.currentTime = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
       });
 
-      function getCanvasSize() {
-        if (editorRatio === 'square') return { width: 720, height: 720 };
-        if (editorRatio === 'wide') return { width: 1280, height: 720 };
-        return { width: 720, height: 1280 };
+      function sequenceActive(sequence) { return sequencePlayback === sequence && (sequence.mode !== 'export' || (isExporting && !exportCancelled)); }
+      function syncSequenceMusic(seconds) {
+        if (!musicObjectUrl) return;
+        try { musicPlayer.currentTime = Number.isFinite(musicPlayer.duration) && musicPlayer.duration > 0 ? seconds % musicPlayer.duration : 0; } catch (_) {}
+        musicPlayer.loop = true;
+      }
+      async function playSequenceMedia(sequence) {
+        const jobs = [sequence.player.play()];
+        if (musicObjectUrl && musicPlayer.paused) jobs.push(musicPlayer.play().catch(() => {
+          const warning = 'The added audio could not play during export; it may be missing.';
+          if (sequence.mode === 'export' && !sequence.warnings.includes(warning)) sequence.warnings.push(warning);
+          else if (sequence.mode === 'preview') showToast('Added audio could not start in preview.');
+        }));
+        await Promise.all(jobs);
+      }
+      function preloadSequenceCut(sequence) {
+        const nextIndex=sequence.index+1;
+        if (nextIndex>=sequence.cuts.length) { sequence.nextPromise=null; sequence.nextReady=false; return; }
+        const nextPlayer=sequence.player===editorPlayer ? alternatePlayer : editorPlayer;
+        sequence.nextPlayer=nextPlayer; sequence.nextReady=false; sequence.preloadError=null;
+        sequence.nextPromise=(async () => {
+          if (nextPlayer===alternatePlayer && nextPlayer.src!==currentFileUrl) { nextPlayer.src=currentFileUrl; nextPlayer.load(); }
+          nextPlayer.pause();
+          await waitForDecodedFrame(nextPlayer);
+          if (!sequenceActive(sequence)) return false;
+          await seekToFrame(nextPlayer,sequence.cuts[nextIndex].start);
+          if (!sequenceActive(sequence) || sequence.index+1!==nextIndex) return false;
+          nextPlayer.playbackRate=sequence.cuts[nextIndex].speed;
+          sequence.nextReady=true; return true;
+        })().catch(error => { sequence.preloadError=error; return false; });
+      }
+      async function advanceSequence(sequence) {
+        if (!sequenceActive(sequence) || sequence.transitioning) return;
+        sequence.transitioning=true;
+        const previous=sequence.player;
+        const waiting=!sequence.nextReady;
+        previous.pause();
+        if (waiting) musicPlayer.pause();
+        try {
+          const prepared=sequence.nextPromise && await sequence.nextPromise;
+          if (!sequenceActive(sequence)) return;
+          if (!prepared || !sequence.nextReady) throw sequence.preloadError || new Error('The next cut was not ready.');
+          sequence.index++; sequence.player=sequence.nextPlayer;
+          if (waiting) {
+            syncSequenceMusic(Core.outputDuration(sequence.cuts.slice(0,sequence.index)));
+            const warning='The browser paused briefly while preparing a cut; check the joins and audio.';
+            if (sequence.mode==='export' && !sequence.warnings.includes(warning)) sequence.warnings.push(warning);
+          }
+          updateAudioLevels(); paintEditorPreview(); updateTimelinePlayhead();
+          await playSequenceMedia(sequence);
+          if (!sequenceActive(sequence)) return;
+          sequence.transitioning=false; preloadSequenceCut(sequence);
+        } catch (error) {
+          if (!sequenceActive(sequence)) return;
+          console.warn('Sequence playback failed', error);
+          if (sequence.mode==='export') {
+            exportFailure='The browser could not join the cuts safely. The incomplete export was discarded; try another browser or export a single trim.';
+            exportCancelled=true; stopSequencePlayback();
+            if (sequence.recorder && sequence.recorder.state!=='inactive') sequence.recorder.stop();
+          } else { stopSequencePlayback(); showToast('Could not preview this cut. Try another browser.'); }
+        }
+      }
+      function monitorSequence() {
+        const sequence=sequencePlayback;
+        if (!sequence || sequence.transitioning || !sequenceActive(sequence)) return;
+        const item=sequence.cuts[sequence.index], player=sequence.player;
+        if (!item || (!player.ended && player.currentTime < item.end-.002)) return;
+        if (sequence.index<sequence.cuts.length-1) { advanceSequence(sequence); return; }
+        sequence.transitioning=true; player.pause(); musicPlayer.pause(); updateTimelinePlayhead();
+        if (sequence.mode==='export') {
+          // Give a busy phone encoder time to capture the final frame before
+          // stopping. This holds the final frame briefly rather than truncating it.
+          setTimeout(() => { if (sequenceActive(sequence) && sequence.recorder && sequence.recorder.state!=='inactive') sequence.recorder.stop(); }, 500);
+        } else {
+          const index=sequence.index; stopSequencePlayback();
+          if (editCuts.length) { selectedCut=index; loadCutControls(selectedCut,false); renderTimeline(); }
+          showToast('Timeline preview finished.');
+        }
+      }
+      function runSequenceLoop(sequence) {
+        cancelAnimationFrame(sequenceAnimation);
+        const tick=() => {
+          if (!sequenceActive(sequence)) return;
+          paintEditorPreview(); updateDuration(); updateAudioLevels(); updateTimelinePlayhead(); monitorSequence();
+          sequenceAnimation=requestAnimationFrame(tick);
+        };
+        sequenceAnimation=requestAnimationFrame(tick);
+      }
+      async function previewTimeline() {
+        if (isExporting || exportPreparing) { showToast('Finish or cancel the export first.'); return; }
+        if (sequencePlayback && sequencePlayback.mode==='preview') { stopSequencePlayback(); showToast('Timeline preview stopped.'); return; }
+        if (!currentFile) { showToast('Choose a source video first.'); return; }
+        const file=currentFile;
+        try { await waitForDecodedFrame(editorPlayer); } catch (error) { showToast(error.message); return; }
+        if (file!==currentFile || isExporting || exportPreparing) return;
+        const parts=timelineCuts().map(item => ({...item}));
+        if (!parts.length) { showToast('Choose valid in and out points first.'); return; }
+        stopSequencePlayback();
+        const sequence={ cuts:parts, index:0, mode:'preview', player:editorPlayer, transitioning:true, warnings:[] };
+        sequencePlayback=sequence; editorPlayer.pause(); alternatePlayer.pause(); musicPlayer.pause();
+        document.getElementById('preview-timeline').textContent='■ Stop timeline';
+        try {
+          await seekToFrame(editorPlayer,parts[0].start);
+          if (!sequenceActive(sequence)) return;
+          editorPlayer.playbackRate=parts[0].speed; syncSequenceMusic(0);
+          if (audioGraph) { ensureAlternateAudio(); await audioGraph.context.resume(); }
+          updateAudioLevels(); paintEditorPreview();
+          await playSequenceMedia(sequence);
+          if (sequenceActive(sequence)) { sequence.transitioning=false; preloadSequenceCut(sequence); runSequenceLoop(sequence); }
+        } catch (_) { if (sequenceActive(sequence)) { stopSequencePlayback(); showToast('This browser could not preview the timeline.'); } }
+      }
+      document.getElementById('preview-timeline').addEventListener('click',previewTimeline);
+      alternatePlayer.addEventListener('ended',monitorSequence);
+
+      function getCanvasSize(multipleCuts = false) {
+        const quality = document.getElementById('export-quality').value;
+        const short = quality === '540' || (quality === 'balanced' && multipleCuts) ? 540 : 720;
+        const long = short === 540 ? 960 : 1280;
+        if (editorRatio === 'square') return { width:short, height:short };
+        if (editorRatio === 'wide') return { width:long, height:short };
+        return { width:short, height:long };
       }
       function wrapCanvasText(context, text, maxWidth, maxLines) {
         const words = String(text || '').trim().split(/\s+/).filter(Boolean);
@@ -2241,9 +2695,12 @@
       }
       function paintText(context, text, centerY, fontSize, color, maxWidth, backplate) {
         const clean = String(text || '').trim(); if (!clean) return;
-        context.save(); context.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+        const fonts = { bold:'system-ui, -apple-system, sans-serif', condensed:'"Arial Narrow", Impact, sans-serif', serif:'Georgia, serif', mono:'ui-monospace, monospace' };
+        const font = fonts[document.getElementById('title-font').value] || fonts.bold;
+        const displayed = document.getElementById('title-case').value === 'upper' ? clean.toUpperCase() : clean;
+        context.save(); context.font = `900 ${fontSize}px ${font}`;
         context.textAlign = 'center'; context.textBaseline = 'middle';
-        const lines = wrapCanvasText(context, clean.toUpperCase(), maxWidth, 3);
+        const lines = wrapCanvasText(context, displayed, maxWidth, 3);
         const lineHeight = fontSize * 1.08;
         const width = Math.min(maxWidth, Math.max(...lines.map(line => context.measureText(line).width)));
         const totalHeight = lines.length * lineHeight;
@@ -2255,17 +2712,15 @@
       }
       function drawEditorFrame(context, width, height) {
         const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
-        const start = Math.max(0, sliderValue('trim-in'));
-        const end = Math.max(start, sliderValue('trim-out') || editorPlayer.duration || start);
-        const elapsed = Math.max(0, (editorPlayer.currentTime || 0) - start);
-        const remaining = Math.max(0, end - (editorPlayer.currentTime || 0));
-        const progress = end > start ? clamp(elapsed / (end - start), 0, 1) : 0;
+        const clock = timelineClock();
+        const elapsed = clock.elapsed, remaining = clock.remaining, progress = clock.progress;
         const zoomFrom = sliderValue('zoom-start') / 100;
         const zoomTo = document.getElementById('zoom-animate').checked ? sliderValue('zoom-end') / 100 : zoomFrom;
         const zoom = clamp(zoomFrom + (zoomTo - zoomFrom) * progress, .5, 2.5);
         context.save(); context.clearRect(0,0,width,height); context.fillStyle = '#050707'; context.fillRect(0,0,width,height);
-        const videoWidth = editorPlayer.videoWidth || 0, videoHeight = editorPlayer.videoHeight || 0;
-        if (videoWidth && videoHeight && editorPlayer.readyState >= 2) {
+        const player = activeEditorPlayer();
+        const videoWidth = player.videoWidth || 0, videoHeight = player.videoHeight || 0;
+        if (videoWidth && videoHeight && player.readyState >= 2) {
           const rotated = Math.abs(clipRotation % 180) === 90;
           const fitWidth = rotated ? videoHeight : videoWidth;
           const fitHeight = rotated ? videoWidth : videoHeight;
@@ -2274,7 +2729,7 @@
           if ('filter' in context) context.filter = selectedFilter();
           context.translate(width / 2 + width * sliderValue('pan-x') / 200, height / 2 + height * sliderValue('pan-y') / 200);
           context.rotate(clipRotation * Math.PI / 180); context.scale((clipFlipX ? -1 : 1) * zoom, zoom);
-          context.drawImage(editorPlayer, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+          context.drawImage(player, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
         }
         context.restore();
         const vignette = clamp(sliderValue('vignette-range') / 100, 0, 1);
@@ -2303,24 +2758,27 @@
           context.restore();
         }
         const subtitleText = subtitleInput.value.trim();
-        if (subtitleText) paintText(context, subtitleText, height * .90, Math.max(width * 20 / 720, titleSize * .43), document.getElementById('accent-color').value, width * .84, true);
+        const subtitleStart = Math.max(0, sliderValue('subtitle-start')), subtitleEnd = Math.max(0, sliderValue('subtitle-end'));
+        if (subtitleText && elapsed >= subtitleStart && (!subtitleEnd || elapsed < subtitleEnd)) paintText(context, subtitleText, height * .90, Math.max(width * 20 / 720, titleSize * .43), document.getElementById('accent-color').value, width * .84, true);
         const fadeIn = sliderValue('fade-in'), fadeOut = sliderValue('fade-out');
-        const visibility = Math.min(fadeIn ? clamp(elapsed / fadeIn, 0, 1) : 1, fadeOut ? clamp(remaining / fadeOut, 0, 1) : 1);
+        const visibility = Math.min(transitionVisibility(clock), fadeIn ? clamp(elapsed / fadeIn, 0, 1) : 1, fadeOut ? clamp(remaining / fadeOut, 0, 1) : 1);
         if (visibility < 1) { context.fillStyle = `rgba(0,0,0,${1-visibility})`; context.fillRect(0, 0, width, height); }
       }
       function updateExportProgress() {
         if (!isExporting) return;
-        const start = Number(document.getElementById('trim-in').value) || 0;
-        const end = Number(document.getElementById('trim-out').value) || editorPlayer.duration || 0;
-        const ratio = end > start ? Math.min(1, Math.max(0, (editorPlayer.currentTime - start) / (end - start))) : 0;
+        const clock = timelineClock();
+        const ratio = clock.progress;
         document.getElementById('export-progress-fill').style.width = (ratio * 100).toFixed(1) + '%';
         document.getElementById('export-progress-value').textContent = Math.floor(ratio * 100) + '%';
-        document.getElementById('export-progress-label').textContent = `Rendering at ${timeLabel(editorPlayer.currentTime - start)} / ${timeLabel(end - start)}`;
-        if (ratio >= 1 && exportRecorder && exportRecorder.state === 'recording') { editorPlayer.pause(); exportRecorder.stop(); }
+        document.getElementById('export-progress-label').textContent = `Rendering at ${timeLabel(clock.elapsed)} / ${timeLabel(clock.total)}`;
       }
-      function currentMimeType() {
+      function currentMimeType(multipleCuts = false) {
         if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
-        const candidates = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+        const compatibleMp4 = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+        const webm = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'];
+        // Prefer a specific H.264/AAC MP4 for a single cut. An unspecified
+        // Chromium MP4 can contain VP9/Opus and may not mux reliably.
+        const candidates = multipleCuts ? [...webm, compatibleMp4, 'video/mp4'] : [compatibleMp4, ...webm, 'video/mp4'];
         return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
       }
       function createExportResult(blob, mimeType, warnings = []) {
@@ -2360,78 +2818,111 @@
         if (isExporting || exportPreparing) { showToast('An export is already in progress.'); return; }
         if (!currentFile) { showToast('Add a local video clip before exporting.'); return; }
         if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) { showToast('This browser does not support local video export. Try an updated Safari or Chrome browser.'); exportStatus.textContent = 'Canvas recording is not supported in this browser.'; return; }
+        stopSequencePlayback();
         exportPreparing = true; exportButton.disabled = true; lockEditorControls();
         try {
           try { await waitForDecodedFrame(editorPlayer); } catch (error) { showToast(error.message); return; }
           const duration = Number.isFinite(editorPlayer.duration) ? editorPlayer.duration : 0;
-          const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
-          const end = Math.min(duration, Number(document.getElementById('trim-out').value) || duration);
-          if (end <= start) { showToast('Set an out-point later than the in-point.'); return; }
-          if (end - start > 60) { showToast('For a phone-friendly export, keep this first version to 60 seconds or less.'); return; }
-          const dimensions = getCanvasSize();
+          const parts = Core.cuts(timelineCuts(), duration);
+          if (!parts || !parts.length) { exportStatus.textContent = 'Set valid in and out points within the source video (up to 12 hours).'; showToast('Set valid in and out points within the source video.'); return; }
+          const sourceLength = Core.sourceDuration(parts), outputLength = Core.outputDuration(parts);
+          if (sourceLength > 60.001 || outputLength > 60.001) { exportStatus.textContent = 'Shorten the timeline: export supports at most 60 seconds of source and 60 seconds of planned edit time.'; showToast('Shorten the timeline to 60 seconds or less.'); return; }
+          // Seek before creating the capture stream so a prior preview frame cannot
+          // become the first frame in the finished export.
+          editorPlayer.pause(); alternatePlayer.pause();
+          await seekToFrame(editorPlayer, parts[0].start);
+          const dimensions = getCanvasSize(parts.length > 1);
           const canvas = document.createElement('canvas'); canvas.width = dimensions.width; canvas.height = dimensions.height;
           const context = canvas.getContext('2d');
           if (!context) { showToast('Could not start the export canvas.'); return; }
-          const stream = canvas.captureStream(24);
+          let stream = canvas.captureStream(0);
+          let captureTrack = stream.getVideoTracks()[0];
+          const manualFrames = !!captureTrack && typeof captureTrack.requestFrame === 'function';
+          if (!manualFrames) { stream.getTracks().forEach(track => track.stop()); stream = canvas.captureStream(24); captureTrack = stream.getVideoTracks()[0]; }
           const warnings = [];
           let tempAudioDestination = null;
           try {
             const graph = ensureAudioGraph();
             if (graph) {
+              if (parts.length > 1) ensureAlternateAudio();
               await graph.context.resume();
               tempAudioDestination = graph.context.createMediaStreamDestination();
               graph.videoGain.connect(tempAudioDestination);
+              if (graph.alternateGain && parts.length > 1) graph.alternateGain.connect(tempAudioDestination);
               if (graph.musicGain && musicObjectUrl) graph.musicGain.connect(tempAudioDestination);
               tempAudioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
             }
           } catch (error) { console.warn('Audio capture unavailable for this export', error); }
           if (!stream.getAudioTracks().length) warnings.push('Audio capture was unavailable; this export may be silent.');
-          const mimeType = currentMimeType();
+          function disconnectExportAudio() {
+            if (!tempAudioDestination || !audioGraph) return;
+            for (const gain of [audioGraph.videoGain,audioGraph.alternateGain,audioGraph.musicGain]) if (gain) { try { gain.disconnect(tempAudioDestination); } catch (_) {} }
+          }
+          const mimeType = currentMimeType(parts.length > 1);
           let recorder;
           try { recorder = mimeType ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4200000, audioBitsPerSecond: 128000 }) : new MediaRecorder(stream); }
-          catch (error) { stream.getTracks().forEach(track => track.stop()); showToast('This browser could not start video recording.'); exportStatus.textContent = 'Could not start the recorder. Try a shorter clip or a different browser.'; return; }
-          exportRecorder = recorder; exportCancelled = false; isExporting = true;
+          catch (error) { disconnectExportAudio(); stream.getTracks().forEach(track => track.stop()); showToast('This browser could not start video recording.'); exportStatus.textContent = 'Could not start the recorder. Try a shorter clip or a different browser.'; return; }
+          exportRecorder = recorder; exportCancelled = false; exportFailure = ''; isExporting = true;
           exportResult.hidden = true; exportProgress.hidden = false; exportButton.disabled = true;
           document.getElementById('cancel-export').hidden = false;
           document.getElementById('export-progress-fill').style.width = '0%';
           document.getElementById('export-progress-label').textContent = 'Preparing preview…';
           document.getElementById('export-progress-value').textContent = '0%';
-          const speed = Number(document.getElementById('playback-speed').value) || 1;
-          exportStatus.textContent = `Exporting about ${timeLabel((end-start)/speed)} at ${speed}× speed. Keep Cutline open on this page.`;
+          exportStatus.textContent = `Exporting ${parts.length} ${parts.length === 1 ? 'cut' : 'cuts'} · about ${cutSeconds(outputLength)}. Keep Cutline open on this page.`;
           const chunks = [];
           recorder.addEventListener('dataavailable', event => { if (event.data && event.data.size) chunks.push(event.data); });
-          recorder.addEventListener('error', event => { console.warn('MediaRecorder error', event.error); exportStatus.textContent = 'Export stopped because the browser reported a recording error.'; });
+          recorder.addEventListener('error', event => { console.warn('MediaRecorder error', event.error); exportCancelled = true; exportFailure = 'The browser reported a recording error. The incomplete export was discarded.'; });
           recorder.addEventListener('stop', () => {
-            cancelAnimationFrame(exportAnimation); editorPlayer.pause(); musicPlayer.pause();
+            cancelAnimationFrame(exportAnimation); stopSequencePlayback(); editorPlayer.pause(); musicPlayer.pause();
             document.getElementById('preview-music').innerHTML = '<svg class="icon icon-sm"><use href="#i-play"></use></svg> Preview';
-            if (tempAudioDestination) { try { audioGraph.videoGain.disconnect(tempAudioDestination); } catch (_) {} if (audioGraph.musicGain) { try { audioGraph.musicGain.disconnect(tempAudioDestination); } catch (_) {} } }
+            disconnectExportAudio();
             stream.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
-            isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; unlockEditorControls();
-            if (exportCancelled) { exportStatus.textContent = 'Export cancelled. Your source clip is unchanged.'; showToast('Export cancelled.'); return; }
+            isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; document.getElementById('cancel-export').hidden = true; unlockEditorControls();
+            if (exportCancelled) { exportStatus.textContent = exportFailure || 'Export cancelled. Your source clip is unchanged.'; showToast(exportFailure ? 'Export failed; no partial file was saved.' : 'Export cancelled.'); return; }
             const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' });
             if (!blob.size) { exportStatus.textContent = 'The browser returned an empty export. Try a shorter clip or different browser.'; showToast('No video data was returned.'); return; }
             createExportResult(blob, recorder.mimeType || mimeType || blob.type, warnings);
-            exportStatus.textContent = warnings.length ? 'Your clip is ready, but check the audio warning below.' : 'Your edited clip is ready. Preview it, then download or share it.';
+            exportStatus.textContent = warnings.length ? 'Your clip is ready, but check the warnings below.' : 'Your edited clip is ready. Preview it, then download or share it.';
             showToast('Export complete. Check the file before posting.');
           }, { once: true });
-          const paint = () => { if (!isExporting) return; drawEditorFrame(context, canvas.width, canvas.height); exportAnimation = requestAnimationFrame(paint); };
-          paint();
+          const sequence = { cuts:parts.map(item => ({...item})), index:0, mode:'export', player:editorPlayer, transitioning:true, recorder, warnings };
+          sequencePlayback = sequence;
+          let lastCapturedAt = 0;
+          const paint = now => {
+            if (!isExporting) return;
+            if (!manualFrames || !lastCapturedAt || now - lastCapturedAt >= 1000 / 24) {
+              if (manualFrames) captureTrack.requestFrame();
+              drawEditorFrame(context, canvas.width, canvas.height);
+              lastCapturedAt = now || performance.now();
+            }
+            updateExportProgress(); monitorSequence(); exportAnimation = requestAnimationFrame(paint);
+          };
+          paint(performance.now());
           try {
-            await seekToFrame(editorPlayer, start);
-            updateAudioLevels();
-            if (exportCancelled) { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = 'Export cancelled before rendering began.'; showToast('Export cancelled.'); return; }
-            editorPlayer.playbackRate = Number(document.getElementById('playback-speed').value) || 1;
-            if (musicObjectUrl) { musicPlayer.currentTime = 0; musicPlayer.loop = true; }
-            recorder.start(700);
-            if (musicObjectUrl) { try { await musicPlayer.play(); } catch (_) { warnings.push('The added audio could not play during export; it may be missing.'); } }
-            await editorPlayer.play();
+            await seekToFrame(editorPlayer, parts[0].start);
+            if (exportCancelled || sequencePlayback !== sequence) {
+              cancelAnimationFrame(exportAnimation); isExporting = false; exportButton.disabled = false; exportProgress.hidden = true;
+              disconnectExportAudio();
+              stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = 'Export cancelled before rendering began.'; showToast('Export cancelled.'); return;
+            }
+            editorPlayer.playbackRate = parts[0].speed; syncSequenceMusic(0); updateAudioLevels();
+            drawEditorFrame(context, canvas.width, canvas.height);
+            recorder.start();
+            if (manualFrames) captureTrack.requestFrame();
+            await playSequenceMedia(sequence);
+            if (sequenceActive(sequence)) { sequence.transitioning = false; preloadSequenceCut(sequence); runSequenceLoop(sequence); }
             document.getElementById('export-progress-label').textContent = 'Rendering…';
             document.getElementById('cancel-export').hidden = false;
           } catch (error) {
-            exportCancelled = true;
-            try { if (recorder.state !== 'inactive') recorder.stop(); } catch (_) {}
-            exportStatus.textContent = 'The browser could not play the source clip for export.';
-            if (!recorder.state || recorder.state === 'inactive') { isExporting = false; exportButton.disabled = false; exportProgress.hidden = true; stream.getTracks().forEach(track => track.stop()); }
+            exportCancelled = true; exportFailure = 'The browser could not play the source clip for export. The incomplete export was discarded.';
+            stopSequencePlayback();
+            const wasRecording = recorder.state !== 'inactive';
+            try { if (wasRecording) recorder.stop(); } catch (_) {}
+            if (!wasRecording) {
+              cancelAnimationFrame(exportAnimation); isExporting = false; exportButton.disabled = false; exportProgress.hidden = true;
+              disconnectExportAudio();
+              stream.getTracks().forEach(track => track.stop()); exportStatus.textContent = exportFailure;
+            }
             showToast('Could not start playback for export. Try pressing play once, then export again.');
           }
         } catch (_) {
@@ -2445,11 +2936,11 @@
       exportButton.addEventListener('click', startExport);
       document.getElementById('cancel-export').addEventListener('click', () => {
         if (!isExporting) return;
-        exportCancelled = true; editorPlayer.pause(); musicPlayer.pause();
+        exportCancelled = true; stopSequencePlayback(); editorPlayer.pause(); musicPlayer.pause();
         if (exportRecorder && exportRecorder.state !== 'inactive') exportRecorder.stop();
       });
       document.getElementById('scrub-range').addEventListener('change', () => { if (!isExporting) updateDuration(); });
-      editorPlayer.addEventListener('ended', () => { if (isExporting && exportRecorder && exportRecorder.state === 'recording') exportRecorder.stop(); });
+      editorPlayer.addEventListener('ended', () => { if (sequencePlayback) monitorSequence(); });
       document.getElementById('trim-in').addEventListener('change', () => {
         const start = Math.max(0, Number(document.getElementById('trim-in').value) || 0);
         const out = Number(document.getElementById('trim-out').value) || editorPlayer.duration || 0;
@@ -2457,15 +2948,12 @@
       });
       updateStage(); updateAudioLevels();
 
-      // Preview-only auth flow. Never sends email or signs anyone in.
-      const authModal = document.getElementById('auth-modal');
-      document.querySelectorAll('[data-auth]').forEach(button => button.addEventListener('click', () => { authModal.hidden = false; document.getElementById('auth-email').focus(); }));
-      document.getElementById('close-auth').addEventListener('click', () => { authModal.hidden = true; });
-      authModal.addEventListener('click', event => { if (event.target === authModal) authModal.hidden = true; });
-      document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!authModal.hidden) authModal.hidden = true; if (!aiReviewModal.hidden) aiReviewModal.hidden = true; if (!document.getElementById('coach-consent-modal').hidden) closeCoachConsent(); } });
-      document.getElementById('auth-form').addEventListener('submit', event => { event.preventDefault(); if (!event.currentTarget.reportValidity()) return; document.getElementById('otp-step').hidden = false; showToast('Preview only: no email was sent.'); });
-      document.getElementById('verify-preview').addEventListener('click', () => showToast('No account was created. Connect an auth provider to enable sign-in.'));
-      document.getElementById('google-preview').addEventListener('click', () => showToast('Google sign-in is a preview only; OAuth is not connected.'));
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          if (!aiReviewModal.hidden) aiReviewModal.hidden = true;
+          if (!document.getElementById('coach-consent-modal').hidden) closeCoachConsent();
+        }
+      });
 
       applyTheme();
       renderAll();

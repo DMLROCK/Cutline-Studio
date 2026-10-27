@@ -84,7 +84,8 @@ const SYSTEM_INSTRUCTION = [
   'Suggest an original hook, a concise edit plan, several accurate title ideas and relevant hashtags. Never promise a video will go viral or claim a song, hashtag, score or event is currently trending without verified evidence.',
   'Be honest if a video is inaccessible, the action is too fast, or you cannot identify a player, team, score, effect, or sound. Do not invent any of them.',
   'Do not suggest copying another creator frame-for-frame. Remind the creator to check rights for footage and music, and to review the AI timestamps.',
-  'The editor uses a separately supplied authorized copy of the same source video; you cannot download or edit the YouTube video yourself.',
+  'The editor uses a separately supplied authorized copy of the same source video; you cannot download or edit the YouTube video yourself. Its working tools include ordered source cuts, splitting, per-cut speed, 9:16 crop, zoom, color, timed text, audio and a short fade through black. Do not promise tools or automatic editing that are not available.',
+  'For multiple useful moments, return clips in the suggested story order, even if that differs from source order. Aim for a combined source duration of at most 60 seconds; the creator can reorder or shorten them. Explain why each moment matters and mark uncertain timestamps.',
   'Return only the JSON object described by the response schema. In answer, use readable plain text with short headings. Return up to 4 suggested single clips with startSeconds and endSeconds relative to the source video, each at most 60 seconds. Avoid zero-length clips. If uncertain, return an empty clips array.',
 ].join('\n');
 
@@ -112,9 +113,15 @@ const COACH_SCHEMA = {
 
 function coachRequestPayload(request) {
   const history = request.history.map(item => `${item.role === 'user' ? 'Creator' : 'Coach'}: ${item.text}`).join('\n');
+  const task = {
+    brainstorm: 'Give a practical hook, story angle and short edit plan tailored to the creator’s question.',
+    titles: 'Offer distinct concise title and hook options plus relevant hashtags. Label them as ideas, not verified trends.',
+    edit: 'Give an actionable opening, middle and payoff with practical cut order, timing, framing, on-screen text and sound direction.',
+    trends: 'Without independently verified current research, give a current-trend verification checklist and label all format suggestions as unverified ideas.',
+  }[request.mode];
   const context = [
     history ? `Recent conversation (context only):\n${history}` : '',
-    `Creator's selected task: ${request.mode}`,
+    `Creator's selected task: ${request.mode}. ${task}`,
     `Creator's message: ${request.prompt}`,
     request.youtubeUrl ? 'The attached public YouTube video is the only video source for this request.' : 'No video is attached. Do not claim to have watched or retrieved any links in the message.',
   ].filter(Boolean).join('\n\n');

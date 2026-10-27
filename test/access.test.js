@@ -28,7 +28,7 @@ test('all routes challenge anonymous requests before serving content or invoking
   let calls = 0;
   const base = await start(t, { fetchImpl: async () => { calls++; return providerResponse(); } });
   for (const [method, route] of [
-    ['GET', '/'], ['HEAD', '/'], ['GET', '/index.html?x=1'], ['GET', '/api/health'],
+    ['GET', '/'], ['HEAD', '/'], ['GET', '/index.html?x=1'], ['GET', '/editor-core.js'], ['GET', '/api/health'],
     ['GET', '/server.js'], ['GET', '/missing'], ['GET', '/api/video-review'],
     ['POST', '/api/video-review'], ['POST', '/'],
   ]) {
@@ -66,6 +66,11 @@ test('correct credentials grant access, while wrong or malformed credentials do 
   assert.equal(healthResponse.status, 200);
   assert.equal(JSON.parse(healthText).videoReviewReady, true);
   assert.doesNotMatch(healthText, /test-only-provider-key|test-only-preview-password-42/);
+  const core = await fetch(base + '/editor-core.js', { headers: { Authorization: AUTH } });
+  assert.equal(core.status, 200);
+  assert.match(core.headers.get('content-type'), /javascript/);
+  assert.match(await core.text(), /CutlineEditorCore/);
+  assert.equal((await fetch(base + '/editor-core.js', { method:'POST', headers: { Authorization: AUTH } })).status, 405);
   assert.equal((await fetch(base + '/server.js', { headers: { Authorization: AUTH } })).status, 404);
   const response = await fetch(base + '/api/video-review', {
     method: 'POST',

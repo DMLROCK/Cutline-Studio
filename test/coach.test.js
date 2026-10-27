@@ -71,6 +71,8 @@ test('request normalization finds one link and bounds prompt and chat context', 
   assert.throws(() => normalizeCoachRequest({ prompt: 'https://youtube.com/playlist?list=123' }), /video link/i);
   assert.throws(() => normalizeCoachRequest({ prompt: `${YOUTUBE} https://youtu.be/abcdefghijk` }), /one YouTube/i);
   assert.throws(() => normalizeCoachRequest({ prompt: 'Analyze this', youtubeUrl: 'https://youtube.com.evil.test/' }), /YouTube/i);
+  assert.equal(normalizeCoachRequest({ prompt: 'Summarize it', youtubeUrl: 'https://youtu.be/9hE5-98ZeCg?si=tracking' }).youtubeUrl, YOUTUBE);
+  assert.throws(() => normalizeCoachRequest({ prompt: `Analyze ${YOUTUBE}`, youtubeUrl: 'https://youtu.be/abcdefghijk' }), /one YouTube/i);
 });
 
 test('only a normalized YouTube URL is attached; ordinary URLs remain text', () => {
@@ -78,6 +80,11 @@ test('only a normalized YouTube URL is attached; ordinary URLs remain text', () 
   assert.equal(video.contents[0].parts[0].file_data.file_uri, YOUTUBE);
   assert.equal(video.generationConfig.responseMimeType, 'application/json');
   assert.match(video.systemInstruction.parts[0].text, /uncertain/i);
+  assert.match(video.systemInstruction.parts[0].text, /story order/i);
+  const edit = coachRequestPayload(normalizeCoachRequest({ prompt:'Make an edit', mode:'edit' }));
+  assert.match(edit.contents[0].parts[0].text, /opening, middle and payoff/i);
+  const trends = coachRequestPayload(normalizeCoachRequest({ prompt:'Ideas', mode:'trends' }));
+  assert.match(trends.contents[0].parts[0].text, /verification checklist/i);
   const text = coachRequestPayload(normalizeCoachRequest({ prompt: 'What is at https://example.com/' }));
   assert.equal(text.contents[0].parts.length, 1);
   assert.match(text.contents[0].parts[0].text, /No video is attached/);

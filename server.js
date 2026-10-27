@@ -14,6 +14,7 @@ const {
 
 const indexFile = path.join(__dirname, 'index.html');
 const publicProfileFile = path.join(__dirname, 'public-profile.html');
+const editorCoreFile = path.join(__dirname, 'editor-core.js');
 const DEFAULT_MODEL = 'gemini-3.8-flash';
 // Inline requests also contain base64 and prompt overhead. Leave room below
 // Gemini's recommended 20 MB total request size for short video inputs.
@@ -517,6 +518,13 @@ function createServer({ env = process.env, fetchImpl = globalThis.fetch, now = D
       } catch (_) {
         return sendJson(res, 500, { error: 'Unable to load the application.' });
       }
+    }
+
+    if (pathname === '/editor-core.js') {
+      if (!isRead) return methodNotAllowed(req, res, ['GET', 'HEAD']);
+      req.resume();
+      try { return send(res, 200, await readFile(editorCoreFile), 'text/javascript; charset=utf-8'); }
+      catch (_) { return sendJson(res, 500, { error: 'Unable to load the editor.' }); }
     }
 
     if (pathname === '/api/health') {
