@@ -229,6 +229,36 @@ test('explicit owner flags are required for optional potentially billable provid
   assert.equal(calls, 0);
 });
 
+test('explicit false flags block optional providers even with inherited keys', async t => {
+  const calls = [];
+  const env = {
+    ...ENV,
+    GEMINI_MODEL: 'gemini-3.8-flash',
+    CUTLINE_RESEARCH_ENABLED: 'false',
+    CUTLINE_ARENA_ENABLED: 'false',
+    ARENA_API_KEY: ARENA_KEY,
+    ARENA_MODEL: 'approved/model',
+  };
+  const fetchImpl = async (url, options) => { calls.push({ url, options }); return google(); };
+  const base = await start(t, { env, fetchImpl });
+  const health = await (await fetch(base + '/api/health', { headers: { Authorization: AUTH } })).json();
+  assert.equal(health.coachReady, true);
+  assert.equal(health.researchReady, false);
+  assert.equal(health.arenaReady, false);
+  assert.equal((await request(base, { prompt: 'Titles', research: true })).status, 403);
+  assert.equal((await request(base, { prompt: 'Titles', arena: true })).status, 403);
+  assert.equal((await request(base, { prompt: 'Titles', engine: 'arena' })).status, 503);
+  assert.equal(calls.length, 0);
+  assert.equal((await request(base, { prompt: 'Titles' })).status, 200);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /models\/gemini-3\.8-flash:generateContent$/);
+  assert.equal(JSON.parse(calls[0].options.body).tools, undefined);
+
+  const paused = await start(t, { env: { ...env, CUTLINE_AI_ENABLED: 'false' }, fetchImpl });
+  assert.equal((await request(paused)).status, 503);
+  assert.equal(calls.length, 1, 'disabling AI must also block an inherited Gemini key');
+});
+
 test('a confirmed YouTube chat sends only the link and bounded context to Gemini and returns a clip', async t => {
   const calls = [];
   const clips = [{ label: 'Big play', startSeconds: 4.5, endSeconds: 15, reason: 'Potential payoff', overlay: 'A big play' }];
